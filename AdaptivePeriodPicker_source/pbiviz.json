@@ -1,0 +1,29 @@
+{
+    "visual": {
+        "name": "adaptivePeriodPicker",
+        "displayName": "Adaptive Period Picker",
+        "guid": "adaptivePeriodPicker4CDBAD3DF37FB290A9740D47E25B1F0D",
+        "visualClassName": "Visual",
+        "version": "1.0.0.0",
+        "description": "Date range picker with a calendar that adapts its grid to the selected granularity (days/weeks, months, quarters, semesters, years)",
+        "supportUrl": "https://example.com/support",
+        "gitHubUrl": ""
+    },
+    "apiVersion": "5.11.1",
+    "author": {
+        "name": "Sergio Borges",
+        "email": "sergio@qahs.com"
+    },
+    "assets": {
+        "icon": "assets/icon.png"
+    },
+    "externalJS": null,
+    "style": "style/visual.less",
+    "capabilities": "capabilities.json",
+    "dependencies": null,
+    "stringResources": [
+        "stringResources/en-US/resources.resjson",
+        "stringResources/pt-PT/resources.resjson"
+    ],
+    "version": "1.0.0.0"
+}
