@@ -1,0 +1,327 @@
+/* ROOT CAUSE FIX: percentage heights (including .dp-dlg's own height:100% below)
+   only resolve if EVERY ancestor up to html has a definite height. Without this,
+   html/body/.dp-dlg all collapse to height:auto (content-size) instead of the real
+   ~500px dialog window — confirmed by reproducing the bug byte-for-byte outside
+   Power BI: without this rule, .dp-dlg-period-grid measured exactly 130.4px (matching
+   what was seen in production), and with it, 310px, filling the dialog correctly.
+   This is why the day grid "worked": it has enough of its own content (month/year
+   selects, weekday header, 6 rows of min-height:20px cells) to coincidentally push
+   auto-sizing close to correct, while period cells (min-height:0) have none of that
+   padding and so revealed the underlying bug. */
+html, body { height: 100%; margin: 0; padding: 0; }
+
+:root, .dp-dlg {
+    --dp-bg:           #1e3055;
+    --dp-panel:        #16243f;
+    --dp-accent:       #2d6bc4;
+    --dp-title:        #9ab0cc;
+    --dp-value:        #ffffff;
+    --dp-accent-text:  #ffffff;
+    --dp-border:       #2d4470;
+    --dp-border-width: 1px;
+}
+
+@font: "Segoe UI", sans-serif;
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+.dp-dlg {
+    width: 100%; height: 100%;
+    background: var(--dp-bg); color: var(--dp-value);
+    font-family: @font; font-size: 12px;
+    display: flex; flex-direction: column;
+    overflow: hidden; user-select: none;
+    -webkit-font-smoothing: antialiased;
+}
+
+.dp-dlg-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+/* ── GRANULARITY BAR: the first thing you pick, always pinned to the top ── */
+.dp-gran-bar {
+    display: flex; gap: 4px; padding: 8px 12px; flex-shrink: 0;
+    background: var(--dp-panel); border-bottom: var(--dp-border-width) solid var(--dp-border);
+}
+.dp-gran-btn {
+    flex: 1; padding: 5px 0; border-radius: 5px; font-size: 11px; font-weight: 700;
+    font-family: @font; cursor: pointer; text-align: center;
+    background: transparent; color: var(--dp-title); border: 1.5px solid var(--dp-border);
+    transition: all 0.12s;
+    &:hover { background: rgba(255,255,255,0.06); color: var(--dp-value); }
+    &.active {
+        background: var(--dp-accent); color: var(--dp-accent-text); border-color: var(--dp-accent);
+        box-shadow: 0 2px 6px color-mix(in srgb, var(--dp-accent) 40%, transparent);
+    }
+}
+
+.dp-dlg-shortcuts {
+    width: 116px; flex-shrink: 0;
+    border-right: var(--dp-border-width) solid var(--dp-border);
+    overflow-y: auto; padding: 10px 0;
+    background: color-mix(in srgb, var(--dp-panel) 35%, transparent);
+    &::-webkit-scrollbar { width: 3px; }
+    &::-webkit-scrollbar-thumb { background: var(--dp-border); border-radius: 2px; }
+}
+.dp-dlg-sc {
+    padding: 8px 14px; cursor: pointer; font-size: 11px; color: var(--dp-title);
+    font-weight: 400; transition: all 0.12s; opacity: 0.85;
+    border-left: 2px solid transparent;
+    &:hover { background: rgba(255,255,255,0.05); color: var(--dp-value); opacity: 1; }
+    &.active {
+        background: color-mix(in srgb, var(--dp-accent) 16%, transparent);
+        color: var(--dp-value); font-weight: 600; opacity: 1;
+        border-left-color: var(--dp-accent);
+    }
+}
+.dp-dlg-div { height: 1px; background: var(--dp-border); margin: 8px 14px; opacity: 0.6; }
+.dp-dlg-dyn {
+    padding: 10px 14px 12px; cursor: default;
+    .dp-dlg-dynlbl { font-size: 10px; color: var(--dp-title); margin-bottom: 6px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.4px; }
+    &.active .dp-dlg-dynlbl { color: var(--dp-value); opacity: 1; font-weight: 600; }
+    .dp-dlg-dynrow {
+        display: flex; align-items: center; gap: 7px;
+    }
+    .dp-dlg-dynbox {
+        flex-shrink: 0;
+        background: var(--dp-panel); border: var(--dp-border-width) solid var(--dp-border);
+        border-radius: 5px; padding: 3px 6px; transition: border-color 0.15s;
+        &:focus-within { border-color: var(--dp-accent); }
+    }
+    .dp-dlg-dynin {
+        width: 28px; background: transparent; border: none;
+        color: var(--dp-value); font-size: 12px; font-weight: 600; padding: 2px 0;
+        font-family: @font; text-align: center;
+        &:focus { outline: none; }
+        &::-webkit-inner-spin-button, &::-webkit-outer-spin-button {
+            opacity: 0; transition: opacity 0.15s; transform: scale(0.8);
+        }
+        &:hover::-webkit-inner-spin-button, &:hover::-webkit-outer-spin-button,
+        &:focus::-webkit-inner-spin-button, &:focus::-webkit-outer-spin-button {
+            opacity: 0.7;
+        }
+    }
+    .dp-dlg-dynunit {
+        font-size: 10.5px; color: var(--dp-title); flex: 1;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+}
+
+.dp-dlg-cal {
+    flex: 1; display: flex; flex-direction: column;
+    padding: 14px 16px 10px; gap: 10px; overflow: hidden; min-height: 0;
+}
+
+.dp-dlg-inputs {
+    display: flex; gap: 8px; flex-shrink: 0;
+    .dp-dlg-iw {
+        flex: 1; display: flex; flex-direction: column; gap: 2px;
+        padding: 4px 8px; border-radius: 5px;
+        border: 1.5px solid transparent;
+        background: color-mix(in srgb, var(--dp-panel) 60%, transparent);
+        transition: all 0.18s;
+
+        label {
+            font-size: 9px; color: var(--dp-title); text-transform: uppercase;
+            letter-spacing: 0.5px; font-weight: 600; opacity: 0.7;
+            display: flex; align-items: center; gap: 4px;
+            &::before {
+                content: ""; width: 4px; height: 4px; border-radius: 50%;
+                background: var(--dp-title); opacity: 0; transition: opacity 0.18s;
+            }
+        }
+        input {
+            background: transparent; border: none;
+            color: var(--dp-value); font-size: 12px; font-weight: 600;
+            padding: 0; font-family: @font; width: 100%;
+            &:focus { outline: none; }
+            &::placeholder { color: var(--dp-title); opacity: 0.5; font-weight: 400; }
+            &.err { color: #ff8a80; }
+        }
+
+        &.dp-step-current {
+            border-color: var(--dp-accent);
+            background: color-mix(in srgb, var(--dp-accent) 12%, var(--dp-panel));
+            label { opacity: 1; color: var(--dp-value); &::before { opacity: 1; background: var(--dp-accent); } }
+        }
+        &.dp-step-done:not(.dp-step-current) {
+            border-color: color-mix(in srgb, var(--dp-accent) 35%, transparent);
+        }
+    }
+}
+
+@keyframes dp-flash-anim {
+    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--dp-accent) 55%, transparent); }
+    100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--dp-accent) 0%, transparent); }
+}
+.dp-flash { animation: dp-flash-anim 0.5s ease-out; border-radius: 4px; }
+
+.dp-dlg-calh {
+    display: flex; align-items: center; justify-content: center; gap: 10px; flex-shrink: 0;
+    .dp-dlg-nav {
+        background: transparent; border: none;
+        color: var(--dp-title); font-size: 16px; width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%; cursor: pointer; font-family: @font;
+        transition: all 0.15s;
+        &:hover { background: color-mix(in srgb, var(--dp-accent) 18%, transparent); color: var(--dp-value); }
+        &:active { transform: scale(0.92); }
+    }
+    .dp-dlg-my {
+        display: flex; gap: 4px; align-items: center;
+        select {
+            background: transparent; border: none;
+            color: var(--dp-value); font-size: 14px; font-weight: 700; padding: 3px 4px;
+            font-family: @font; cursor: pointer; border-radius: 4px;
+            transition: background 0.15s;
+            &:hover { background: rgba(255,255,255,0.06); }
+            &:focus { outline: none; background: rgba(255,255,255,0.08); }
+            option { background: var(--dp-panel); color: var(--dp-value); }
+        }
+    }
+}
+
+.dp-dlg-grid {
+    flex: 1; display: flex; flex-direction: column; gap: 3px; overflow: hidden; min-height: 0;
+}
+.dp-dlg-wds {
+    display: grid; grid-template-columns: 0.65fr repeat(7,1fr);
+    padding-bottom: 2px;
+    .dp-dlg-wd { text-align: center; font-size: 9.5px; color: var(--dp-title); padding: 2px 0; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.3px; }
+    .dp-dlg-wn-header { opacity: 0.4; font-size: 8.5px; }
+}
+.dp-dlg-days {
+    flex: 1; display: grid; grid-template-columns: 0.65fr repeat(7,1fr);
+    grid-auto-rows: 1fr; gap: 2px;
+}
+.dp-dlg-wn {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: var(--dp-title); opacity: 0.45;
+    border-right: 1px dashed var(--dp-border); margin-right: 3px;
+}
+.dp-dlg-day {
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11.5px; color: var(--dp-title); cursor: pointer;
+    border-radius: 6px; transition: background 0.1s, color 0.1s; min-height: 20px;
+    &:hover:not(.empty):not(.rs):not(.re) { background: rgba(255,255,255,0.08); color: var(--dp-value); }
+    &.empty { pointer-events: none; }
+    &.future:not(.rs):not(.re):not(.in-range) { opacity: 0.4; }
+
+    &.today {
+        color: var(--dp-accent); font-weight: 800;
+        &::after {
+            content: ""; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);
+            width: 4px; height: 4px; border-radius: 50%; background: var(--dp-accent);
+        }
+        &.rs::after, &.re::after, &.in-range::after { background: var(--dp-accent-text); }
+    }
+
+    &.in-range {
+        background: color-mix(in srgb, var(--dp-accent) 24%, transparent);
+        border-radius: 0; color: var(--dp-value); font-weight: 500;
+    }
+    &.rs {
+        background: var(--dp-accent) !important; color: var(--dp-accent-text) !important;
+        font-weight: 800; border-radius: 6px 0 0 6px;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--dp-accent) 40%, transparent);
+    }
+    &.re {
+        background: var(--dp-accent) !important; color: var(--dp-accent-text) !important;
+        font-weight: 800; border-radius: 0 6px 6px 0;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--dp-accent) 40%, transparent);
+    }
+    &.rs.re { border-radius: 6px; }
+}
+
+.dp-dlg-cal-area {
+    flex: 1; display: grid; grid-template-rows: auto 1fr; min-height: 0;
+    /* CSS Grid instead of a flex column: the flex-based version (flex:1 column with
+       two children) measurably failed to give the content row (.dp-dlg-grid /
+       .dp-dlg-period-gridwrap) its fair share of height — DevTools showed it
+       computing to ~130px inside a ~500px dialog despite every child in the chain
+       having min-height:0 and flex:1 set correctly. Grid's "auto 1fr" row template
+       is a more direct, less failure-prone way to say "size the header to its
+       content, give literally everything else to the second row" — no implicit
+       min-height traps to reason about. */
+}
+.dp-dlg-yrlabel { font-weight: 700; font-size: 14px; color: var(--dp-value); letter-spacing: 0.2px; }
+
+/* Mirrors .dp-dlg-days exactly (single element, flex:1, display:grid, direct child
+   of .dp-dlg-grid) — the previous wrapper+innergrid split for period views (a
+   .dp-dlg-period-gridwrap wrapper containing a separate .dp-dlg-period-grid) had a
+   CSS cascade that measured correct on paper but proved unreliable in the actual
+   Power BI dialog iframe (confirmed via a canary style: CSS loaded and applied, but
+   computed height stayed content-sized instead of stretching, for reasons not found
+   after extensive analysis). Removing the extra nesting level removes the mystery. */
+.dp-dlg-period-grid { flex: 1; display: grid; gap: 4px; }
+.dp-dlg-period-grid-m { grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(3,1fr); }
+.dp-dlg-period-grid-w { grid-template-columns: repeat(9,1fr); grid-template-rows: repeat(6,1fr); }
+.dp-dlg-period-grid-q { grid-template-columns: repeat(4,1fr); }
+.dp-dlg-period-grid-s { grid-template-columns: repeat(6,1fr); }
+.dp-dlg-period-grid-y { grid-template-columns: repeat(4,1fr); }
+
+.dp-dlg-period-grid-q .dp-dlg-period-cell { font-size: 12.5px; }
+.dp-dlg-period-grid-s .dp-dlg-period-cell { font-size: 11px; }
+.dp-dlg-period-grid-w .dp-dlg-period-cell { font-size: 10.5px; }
+
+.dp-dlg-period-cell {
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: var(--dp-title); cursor: pointer; font-weight: 600;
+    border-radius: 6px; transition: background 0.1s, color 0.1s; min-height: 0;
+    border: 1.5px solid var(--dp-border);
+    &:hover:not(.rs):not(.re) { background: rgba(255,255,255,0.08); color: var(--dp-value); }
+
+    &.today { color: var(--dp-accent); border-color: var(--dp-accent); }
+    &.future:not(.rs):not(.re):not(.in-range) { opacity: 0.55; }
+
+    &.in-range {
+        background: color-mix(in srgb, var(--dp-accent) 24%, transparent);
+        border-radius: 0; color: var(--dp-value); border-color: transparent;
+    }
+    &.rs {
+        background: var(--dp-accent) !important; color: var(--dp-accent-text) !important;
+        border-radius: 6px 0 0 6px; border-color: var(--dp-accent);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--dp-accent) 40%, transparent);
+    }
+    &.re {
+        background: var(--dp-accent) !important; color: var(--dp-accent-text) !important;
+        border-radius: 0 6px 6px 0; border-color: var(--dp-accent);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--dp-accent) 40%, transparent);
+    }
+    &.rs.re { border-radius: 6px; }
+}
+
+/* Cells outside the loaded date table's min/max range: not selectable. */
+.dp-dlg-day.disabled, .dp-dlg-wn.disabled, .dp-dlg-period-cell.disabled {
+    opacity: 0.28 !important; pointer-events: none; cursor: default;
+    background: transparent !important; box-shadow: none !important;
+}
+
+.dp-dlg-footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 14px; background: var(--dp-panel);
+    border-top: var(--dp-border-width) solid var(--dp-border); flex-shrink: 0;
+
+    .dp-dlg-info {
+        font-size: 12.5px; font-weight: 600; color: var(--dp-value); flex: 1;
+        letter-spacing: 0.1px; opacity: 0.95;
+    }
+    .dp-dlg-footer-btns { display: flex; gap: 6px; align-items: center; }
+
+    .dp-dlg-btn {
+        padding: 5px 14px; border-radius: 5px; font-size: 11.5px;
+        font-family: @font; cursor: pointer; border: 1.5px solid transparent;
+        transition: all 0.15s; font-weight: 600;
+
+        &.cancel {
+            background: transparent; color: var(--dp-title); border-color: var(--dp-border);
+            &:hover { background: rgba(255,255,255,0.05); color: var(--dp-value); }
+        }
+        &.apply {
+            background: var(--dp-accent); color: var(--dp-accent-text); border-color: var(--dp-accent);
+            font-weight: 700; box-shadow: 0 2px 8px color-mix(in srgb, var(--dp-accent) 40%, transparent);
+            &:hover { filter: brightness(1.1); box-shadow: 0 3px 12px color-mix(in srgb, var(--dp-accent) 55%, transparent); }
+            &:active { transform: translateY(1px); }
+        }
+    }
+}
