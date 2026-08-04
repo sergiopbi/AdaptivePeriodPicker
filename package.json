@@ -1,7 +1,7 @@
 {
   "name": "adaptive-period-picker",
   "description": "Power BI custom visual: a date-range picker with a calendar that adapts to the selected granularity (day/week/month/quarter/semester/year), with a real cross-page-synced filter.",
-  "version": "1.0.0.1",
+  "version": "1.0.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/sergiopbi/AdaptivePeriodPicker.git"

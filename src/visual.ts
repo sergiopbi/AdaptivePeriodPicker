@@ -289,24 +289,6 @@ export class Visual implements IVisual {
         refreshBtn.addEventListener("keydown",(ev:KeyboardEvent)=>{
             if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); ev.stopPropagation(); this.applyDefaultDynamic(); }
         });
-        const closedTooltip=()=>{
-            if(this.rangeS&&this.rangeE){
-                const days=Math.round((this.rangeE.getTime()-this.rangeS.getTime())/86400000)+1;
-                const rangeTxt = same(this.rangeS,this.rangeE) ? fmt(this.rangeS) : `${fmt(this.rangeS)} – ${fmt(this.rangeE)}`;
-                const daysLbl = this.lang==="PT" ? "dias" : "days";
-                return [{displayName:GRAN_SING[this.lang][this.gran], value:`${rangeTxt} (${days} ${daysLbl})`}];
-            }
-            return [{displayName:this.lang==="PT"?"Período":"Period", value:this.t().nsel}];
-        };
-        this.closedEl.addEventListener("mouseover",(ev:MouseEvent)=>{
-            if(this.host.hostCapabilities.allowInteractions===false) return;
-            this.host.tooltipService.show({dataItems:closedTooltip(),identities:[],coordinates:[ev.clientX,ev.clientY],isTouchEvent:false});
-        });
-        this.closedEl.addEventListener("mousemove",(ev:MouseEvent)=>{
-            if(this.host.hostCapabilities.allowInteractions===false) return;
-            this.host.tooltipService.move({dataItems:closedTooltip(),identities:[],coordinates:[ev.clientX,ev.clientY],isTouchEvent:false});
-        });
-        this.closedEl.addEventListener("mouseleave",()=>{ this.host.tooltipService.hide({isTouchEvent:false,immediately:true}); });
         this.wrap.append(this.closedEl);
         this.updateClosedLabel();
     }
@@ -750,16 +732,6 @@ export class Visual implements IVisual {
             cell.addEventListener("keydown",(ev:KeyboardEvent)=>{
                 if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); cell.click(); }
             });
-            const cellRangeTxt = same(c.s,c.e) ? fmt(c.s) : `${fmt(c.s)} – ${fmt(c.e)}`;
-            cell.addEventListener("mouseover",(ev:MouseEvent)=>{
-                if(this.host.hostCapabilities.allowInteractions===false) return;
-                this.host.tooltipService.show({dataItems:[{displayName:c.label,value:cellRangeTxt}],identities:[],coordinates:[ev.clientX,ev.clientY],isTouchEvent:false});
-            });
-            cell.addEventListener("mousemove",(ev:MouseEvent)=>{
-                if(this.host.hostCapabilities.allowInteractions===false) return;
-                this.host.tooltipService.move({dataItems:[{displayName:c.label,value:cellRangeTxt}],identities:[],coordinates:[ev.clientX,ev.clientY],isTouchEvent:false});
-            });
-            cell.addEventListener("mouseleave",()=>{ this.host.tooltipService.hide({isTouchEvent:false,immediately:true}); });
             this.calDaysEl.append(cell);
         });
 
@@ -790,15 +762,6 @@ export class Visual implements IVisual {
             if(opt===this.granSelected) btn.classList.add("active");
             btn.textContent=opt;
             btn.addEventListener("click",()=>this.selectGran(opt));
-            btn.addEventListener("mouseover",(ev:MouseEvent)=>{
-                if(this.host.hostCapabilities.allowInteractions===false) return;
-                this.host.tooltipService.show({dataItems:[{displayName:opt,value:GRAN_SING[this.lang][opt]}],identities:[],coordinates:[ev.clientX,ev.clientY],isTouchEvent:false});
-            });
-            btn.addEventListener("mousemove",(ev:MouseEvent)=>{
-                if(this.host.hostCapabilities.allowInteractions===false) return;
-                this.host.tooltipService.move({dataItems:[{displayName:opt,value:GRAN_SING[this.lang][opt]}],identities:[],coordinates:[ev.clientX,ev.clientY],isTouchEvent:false});
-            });
-            btn.addEventListener("mouseleave",()=>{ this.host.tooltipService.hide({isTouchEvent:false,immediately:true}); });
             bar.append(btn);
         });
         this.granBarEl=bar;
@@ -973,16 +936,6 @@ export class Visual implements IVisual {
                     cell.addEventListener("keydown",(ev:KeyboardEvent)=>{
                         if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); cell.click(); }
                     });
-                    const dayLabel = this.lang==="PT" ? "Data" : "Date";
-                    cell.addEventListener("mouseover",(ev:MouseEvent)=>{
-                        if(this.host.hostCapabilities.allowInteractions===false) return;
-                        this.host.tooltipService.show({dataItems:[{displayName:dayLabel,value:fmt(cd)}],identities:[],coordinates:[ev.clientX,ev.clientY],isTouchEvent:false});
-                    });
-                    cell.addEventListener("mousemove",(ev:MouseEvent)=>{
-                        if(this.host.hostCapabilities.allowInteractions===false) return;
-                        this.host.tooltipService.move({dataItems:[{displayName:dayLabel,value:fmt(cd)}],identities:[],coordinates:[ev.clientX,ev.clientY],isTouchEvent:false});
-                    });
-                    cell.addEventListener("mouseleave",()=>{ this.host.tooltipService.hide({isTouchEvent:false,immediately:true}); });
                 } else {
                     cell.setAttribute("tabindex","-1");
                     cell.setAttribute("aria-disabled","true");
