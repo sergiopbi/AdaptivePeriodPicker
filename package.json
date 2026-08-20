@@ -1,7 +1,7 @@
 {
   "name": "adaptive-period-picker",
   "description": "Power BI custom visual: a date-range picker with a calendar that adapts to the selected granularity (day/week/month/quarter/semester/year), with a real cross-page-synced filter.",
-  "version": "1.0.0.0",
+  "version": "1.0.1.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/sergiopbi/AdaptivePeriodPicker.git"
@@ -15,8 +15,6 @@
     "eslint": "npx eslint . --ext .js,.jsx,.ts,.tsx"
   },
   "dependencies": {
-    "@types/d3": "7.4.3",
-    "d3": "7.9.0",
     "powerbi-models": "^2.0.1",
     "powerbi-visuals-api": "~5.11.1",
     "powerbi-visuals-utils-formattingmodel": "6.0.4"
@@ -25,6 +23,7 @@
     "@typescript-eslint/eslint-plugin": "^8.8.0",
     "eslint": "^9.11.1",
     "eslint-plugin-powerbi-visuals": "^1.0.0",
+    "powerbi-visuals-tools": "^7.2.1",
     "typescript": "5.5.4"
   }
 }

@@ -6,6 +6,11 @@ import "./dialog";
 import { DIALOG_ID, DialogInitialState, DialogResultState } from "./dialog";
 import { FormattingSettingsService } from "powerbi-visuals-utils-formattingmodel";
 import { VisualFormattingSettingsModel } from "./settings";
+import { attachResizer } from "./resize";
+import {
+    Gran, Lang, normalizeGran, GRAN_SING, I18N, SHORTCUTS,
+    d0, dMs, same, fmt, resolveEffectiveGran, calRange, shortcutRange, parseDate, isoWeekNumber
+} from "./shared";
 
 import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructorOptions;
 import VisualUpdateOptions      = powerbi.extensibility.visual.VisualUpdateOptions;
@@ -15,113 +20,6 @@ import IVisualEventService      = powerbi.extensibility.IVisualEventService;
 import FilterAction             = powerbi.FilterAction;
 import VisualDialogPositionType = powerbi.VisualDialogPositionType;
 
-type Gran = "D"|"W"|"M"|"Q"|"S"|"Y";
-type Lang = "PT"|"EN";
-
-
-
-const GRAN_ALIASES: Record<Gran,string[]> = {
-    D:["d","dia","dias","day","days","diário","diario","daily"],
-    W:["w","semana","semanas","week","weeks","semanal","weekly"],
-    M:["m","mes","mês","meses","month","months","mensal","monthly"],
-    Q:["q","trimestre","trimestres","quarter","quarters","trimestral","quarterly"],
-    S:["s","semestre","semestres","semester","semesters","semestral"],
-    Y:["y","ano","anos","year","years","anual","annual","yearly"]
-};
-function normalizeGran(raw:string):Gran|null{
-    const k=raw.trim().toLowerCase();
-    for(const g of ["D","W","M","Q","S","Y"] as Gran[]) if(GRAN_ALIASES[g].includes(k)) return g;
-    return null;
-}
-
-const GRAN_SING: Record<Lang,Record<Gran,string>> = {
-    PT:{D:"Diário",W:"Semanal",M:"Mensal",Q:"Trimestral",S:"Semestral",Y:"Anual"},
-    EN:{D:"Daily",W:"Weekly",M:"Monthly",Q:"Quarterly",S:"Semester",Y:"Annual"}
-};
-
-const I18N: Record<Lang,{
-    today:string; yesterday:string; thisWeek:string; lastWeek:string; thisMonth:string;
-    thisQuarter:string; thisSemester:string; thisYear:string;
-    mtd:string; qtd:string; ytd:string;
-    lastN:string; granLabels:Record<Gran,string>;
-    apply:string; cancel:string; start:string; end:string;
-    clickEnd:string; days:string; months:string[]; wdays:string[];
-    title:string; nsel:string; clear:string; landingPage:string;
-}> = {
-    PT:{
-        today:"Hoje",yesterday:"Ontem",thisWeek:"Esta Semana",lastWeek:"Semana Passada",
-        thisMonth:"Este Mês",thisQuarter:"Este Trimestre",thisSemester:"Este Semestre",thisYear:"Este Ano",
-        mtd:"Mês até à data",qtd:"Trim. até à data",ytd:"Ano até à data",
-        lastN:"Últimos",granLabels:{D:"Dias",W:"Semanas",M:"Meses",Q:"Trimestres",S:"Semestres",Y:"Anos"},
-        apply:"Aplicar",cancel:"Cancelar",start:"Início",end:"Fim",
-        clickEnd:"→ clica para definir o fim",days:"dias",clear:"Limpar",
-        months:["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"],
-        wdays:["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"],
-        title:"Seletor de Período", nsel:"Clica para selecionar período",
-        landingPage:"Adicione um campo de data ao \"Date Column\" para começar."
-    },
-    EN:{
-        today:"Today",yesterday:"Yesterday",thisWeek:"This Week",lastWeek:"Last Week",
-        thisMonth:"This Month",thisQuarter:"This Quarter",thisSemester:"This Semester",thisYear:"This Year",
-        mtd:"Month to Date",qtd:"Quarter to Date",ytd:"Year to Date",
-        lastN:"Last",granLabels:{D:"Days",W:"Weeks",M:"Months",Q:"Quarters",S:"Semesters",Y:"Years"},
-        apply:"Apply",cancel:"Cancel",start:"Start",end:"End",
-        clickEnd:"→ click to set end date",days:"days",clear:"Clear",
-        months:["January","February","March","April","May","June","July","August","September","October","November","December"],
-        wdays:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
-        title:"Period Selector", nsel:"Click to select period",
-        landingPage:"Add a date field to \"Date Column\" to get started."
-    }
-};
-
-const SHORTCUTS:{id:string;labelKey:string;visibleFor:Gran[];settingKey:string}[]=[
-    {id:"today",       labelKey:"today",        visibleFor:["D"],                settingKey:"scToday"},
-    {id:"yesterday",   labelKey:"yesterday",    visibleFor:["D"],                settingKey:"scYesterday"},
-    {id:"thisWeek",    labelKey:"thisWeek",     visibleFor:["D","W"],            settingKey:"scThisWeek"},
-    {id:"lastWeek",    labelKey:"lastWeek",     visibleFor:["D","W"],            settingKey:"scLastWeek"},
-    {id:"thisMonth",   labelKey:"thisMonth",    visibleFor:["D","M"],            settingKey:"scThisMonth"},
-    {id:"mtd",         labelKey:"mtd",          visibleFor:["D","M"],            settingKey:"scMtd"},
-    {id:"qtd",         labelKey:"qtd",          visibleFor:["D","M","Q"],        settingKey:"scQtd"},
-    {id:"ytd",         labelKey:"ytd",          visibleFor:["D","M","Q","S","Y"],settingKey:"scYtd"},
-    {id:"thisQuarter", labelKey:"thisQuarter",  visibleFor:["D","M","Q"],        settingKey:"scThisQuarter"},
-    {id:"thisSemester",labelKey:"thisSemester", visibleFor:["D","M","Q","S"],    settingKey:"scThisSemester"},
-    {id:"thisYear",    labelKey:"thisYear",     visibleFor:["D","M","Q","S","Y"],settingKey:"scThisYear"},
-];
-
-const d0=(d:Date)=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
-const dMs=(d:Date)=>d0(d).getTime();
-const same=(a:Date,b:Date)=>dMs(a)===dMs(b);
-const fmt=(d:Date)=>`${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getFullYear()).slice(-2)}`;
-
-function startOfWeekMon(d:Date){const r=new Date(d);const dw=r.getDay();r.setDate(r.getDate()+(dw===0?-6:1-dw));r.setHours(0,0,0,0);return r;}
-
-function calRange(today:Date,n:number,g:Gran):{s:Date,e:Date}{
-    switch(g){
-        case "D":return{s:d0(new Date(today.getTime()-n*86400000)),e:d0(today)};
-        case "W":{const sw=startOfWeekMon(today);const s=new Date(sw);s.setDate(s.getDate()-(n-1)*7);const e=new Date(sw);e.setDate(e.getDate()+6);return{s,e};}
-        case "M":{const s=new Date(today.getFullYear(),today.getMonth()-n+1,1);const e=new Date(today.getFullYear(),today.getMonth()+1,0);return{s,e};}
-        case "Q":{const cq=Math.floor(today.getMonth()/3);const s=new Date(today.getFullYear(),cq*3-(n-1)*3,1);const e=new Date(today.getFullYear(),cq*3+3,0);return{s,e};}
-        case "S":{const cs=today.getMonth()<6?0:1;const s=new Date(today.getFullYear(),cs*6-(n-1)*6,1);const e=new Date(today.getFullYear(),cs*6+6,0);return{s,e};}
-        case "Y":{return{s:new Date(today.getFullYear()-n+1,0,1),e:new Date(today.getFullYear(),11,31)};}
-    }
-}
-function shortcutRange(id:string,today:Date):{s:Date,e:Date}|null{
-    switch(id){
-        case "today":return{s:d0(today),e:d0(today)};
-        case "yesterday":{const y=new Date(today);y.setDate(y.getDate()-1);return{s:d0(y),e:d0(y)};}
-        case "thisWeek":{const sw=startOfWeekMon(today);const ew=new Date(sw);ew.setDate(ew.getDate()+6);return{s:sw,e:ew};}
-        case "lastWeek":{const sw=startOfWeekMon(today);const ls=new Date(sw);ls.setDate(ls.getDate()-7);const le=new Date(ls);le.setDate(le.getDate()+6);return{s:ls,e:le};}
-        case "thisMonth":return{s:new Date(today.getFullYear(),today.getMonth(),1),e:new Date(today.getFullYear(),today.getMonth()+1,0)};
-        case "thisQuarter":{const q=Math.floor(today.getMonth()/3);return{s:new Date(today.getFullYear(),q*3,1),e:new Date(today.getFullYear(),q*3+3,0)};}
-        case "thisSemester":{const sm=today.getMonth()<6?0:6;return{s:new Date(today.getFullYear(),sm,1),e:new Date(today.getFullYear(),sm+6,0)};}
-        case "thisYear":return{s:new Date(today.getFullYear(),0,1),e:new Date(today.getFullYear(),11,31)};
-        // To-date variants: from period start UP TO the reference date (today)
-        case "mtd":return{s:new Date(today.getFullYear(),today.getMonth(),1),e:d0(today)};
-        case "qtd":{const q=Math.floor(today.getMonth()/3);return{s:new Date(today.getFullYear(),q*3,1),e:d0(today)};}
-        case "ytd":return{s:new Date(today.getFullYear(),0,1),e:d0(today)};
-        default:return null;
-    }
-}
 
 // ── State persisted across page navigation via general.objects ────────────────
 // We store activeSC + dynN as a small JSON string in a separate property so we
@@ -140,9 +38,14 @@ export class Visual implements IVisual {
     private lang:   Lang = "PT";
     private refDate: Date = new Date(); // overridable by refDateMeasure; falls back to system clock
     private lastGranOptionsKey: string = "";
+    private lastShowAutoGranToggle: boolean|null = null;
+    private lastHoverExpand: boolean|null = null;
+    private lastLockResizers: boolean|null = null;
     private defaultN = 12; // configurable default number of periods for the refresh button
     private defaultType = "dynamic"; // what the refresh button applies
     private applyImmediate = true; // true = apply on click, false = require Apply button
+    private hoverExpandEnabled = false; // Inline Vertical only — see hoverExpand's description
+    private resizersLocked = false;
     private scVisible: Record<string,boolean> = {}; // per-shortcut visibility toggles
     private dataMinDate: Date|null = null; // min date from the date table
     private dataMaxDate: Date|null = null; // max date from the date table
@@ -157,6 +60,21 @@ export class Visual implements IVisual {
     private granMode: "column"|"fixed" = "fixed";
     private granOptions: string[] = []; // distinct literal values found in granColumn, in natural D..Y order
     private granSelected: string|null = null; // literal currently selected (column mode only)
+    private granAutoRuntime: boolean = true; // session-only; re-initialized from fmtSettings on each load, never persisted
+    private granAutoTouchedByViewer: boolean = false; // once the viewer touches the runtime toggle (inline or popup), stop re-syncing from the format-pane default so update() re-renders don't stomp their in-session choice — until then, keep syncing, so changing the default while testing/authoring takes effect immediately
+    private manualGranOverride: Gran|null = null; // session-only; set once the viewer picks Manual and possibly changes the dropdown
+    // True from the moment a top-bar granularity click (selectGran) changes the calendar
+    // shape without applying anything, until the next applyFilter() actually commits
+    // something. While true, update()'s gran-sync block leaves this.granSelected alone —
+    // otherwise the still-unchanged, now-stale applied filter round-trips back via
+    // opts.jsonFilters and silently reverts the browse-only click a moment later (the
+    // shape flickering back to whatever was last actually applied). Once the viewer
+    // commits a real pick, applyFilter() clears this and normal syncing (including the
+    // desired auto-downgrade-on-a-too-small-range behaviour) resumes on the fresh range.
+    private granSelectedDiverged = false;
+    private autoGranRowInline: HTMLElement|null = null;
+    private manualGranSelectInline!: HTMLSelectElement;
+    private effectiveGranLblInline!: HTMLElement;
 
     // DOM
     private wrap!:        HTMLElement;
@@ -195,6 +113,35 @@ export class Visual implements IVisual {
     private calM = new Date().getMonth();
 
     private currentMode: "popup"|"inline-vertical"|"inline-horizontal" = "popup";
+
+    // User-dragged zone sizes (px) — persisted (see persistPaneSizes()) so publishing or
+    // reopening the report keeps whatever layout was set up, same as gran/activeSC already do.
+    // Point 7: this is per VISUAL INSTANCE, not per visual TYPE — copy/pasting this exact
+    // visual onto another page carries its persisted properties (including sizes) along,
+    // but inserting a fresh copy on another page does not; there's no cross-instance default
+    // in Power BI's object model to hook into for that.
+    private paneSizes: Record<string, number> = {};
+    private paneSizesLoaded = false; // read from persisted state at most once — afterwards this.paneSizes is the live source of truth
+    // Round-trips through persistProperties as one JSON blob together with activeSC/dynN/gran
+    // (see applyFilter()) — merged in here rather than overwritten, so a resize doesn't clobber
+    // those fields and vice versa.
+    private lastIntent: Record<string, unknown> = {};
+    // axis="row": target's height in px. axis="col": target's width in px.
+    private addResizer(axis:"row"|"col", target:HTMLElement, sign:1|-1, key:string, min:number, max?:number, getMax?:()=>number, defaultPx?:number, revealScale?:number, revealPx?:number, alwaysFree?:boolean):HTMLElement{
+        return attachResizer({
+            axis, target, sign, min, max, getMax, defaultPx, revealScale, revealPx,
+            locked: alwaysFree ? false : this.resizersLocked,
+            initialPx: this.paneSizes[key],
+            onResize:(px)=>{ if(px<0) delete this.paneSizes[key]; else this.paneSizes[key]=px; },
+            onCommit:()=>this.persistPaneSizes()
+        });
+    }
+    private persistPaneSizes(){
+        this.lastIntent={...this.lastIntent, sizes:this.paneSizes};
+        this.host.persistProperties({
+            merge:[{ objectName:"general", selector:null, properties:{ state: JSON.stringify(this.lastIntent) } }]
+        });
+    }
 
     constructor(o:VisualConstructorOptions){
         this.host   = o.host;
@@ -245,18 +192,41 @@ export class Visual implements IVisual {
             return;
         }
         const c=this.fmtSettings?.dataColors;
-        const b=this.fmtSettings?.border;
         if(!c) return;
-        target.style.setProperty("--dp-bg",          c.backgroundColor.value.value);
-        target.style.setProperty("--dp-panel",       c.panelColor.value.value);
+        // These are labelled "Transparência" (transparency), so the value itself has to
+        // mean "% transparent" — 100 fully see-through, 0 fully solid — not "% opaque" the
+        // way the underlying color-mix() call wants it, hence the 100-minus below.
+        const bgOp = 100-Math.max(0,Math.min(100,c.backgroundOpacity.value??0));
+        const panelOp = 100-Math.max(0,Math.min(100,c.panelOpacity.value??0));
+        target.style.setProperty("--dp-bg",          `color-mix(in srgb, ${c.backgroundColor.value.value} ${bgOp}%, transparent)`);
+        target.style.setProperty("--dp-panel",       `color-mix(in srgb, ${c.panelColor.value.value} ${panelOp}%, transparent)`);
+        // This is specifically the widget's OWN background while collapsed (hover mode,
+        // not hovering) — granularity and Início/Fim keep their normal opaque boxes either
+        // way (painted on top of it), so the only area this actually shows through is the
+        // blank space left behind by the hidden shortcuts+calendar+footer. On hover it
+        // reverts to the plain --dp-bg (see .dp-hover-mode.dp-hover-active in the CSS) —
+        // fully matching the normal "fundo principal" look, not a separate style of its own.
+        const hoverOp = 100-Math.max(0,Math.min(100,c.hoverRevealOpacity.value??0));
+        target.style.setProperty("--dp-hover-reveal-bg", `color-mix(in srgb, ${c.backgroundColor.value.value} ${hoverOp}%, transparent)`);
         target.style.setProperty("--dp-accent",      c.accentColor.value.value);
         target.style.setProperty("--dp-title",       c.titleColor.value.value);
         target.style.setProperty("--dp-value",       c.valueColor.value.value);
         target.style.setProperty("--dp-accent-text", c.accentTextColor.value.value);
-        if(b){
-            target.style.setProperty("--dp-border",       b.borderColor.value.value);
-            target.style.setProperty("--dp-border-width", `${b.borderWidth.value}px`);
-        }
+        // Four independent zones now (granularity bar / shortcuts / calendar / control
+        // panel), each with its own real font-family and font-size — no more global zoom.
+        // pt→px: 1pt = 4/3px, the standard CSS conversion factor.
+        target.style.setProperty("--dp-font-family-gran",      c.fontFamilyGran.value);
+        target.style.setProperty("--dp-font-size-gran",        `${(c.fontSizeGran.value||7)*4/3}px`);
+        target.style.setProperty("--dp-font-family-shortcuts", c.fontFamilyShortcuts.value);
+        target.style.setProperty("--dp-font-size-shortcuts",   `${(c.fontSizeShortcuts.value||9)*4/3}px`);
+        target.style.setProperty("--dp-font-family-content",   c.fontFamilyContent.value);
+        target.style.setProperty("--dp-font-size-content",     `${(c.fontSizeContent.value||9)*4/3}px`);
+        target.style.setProperty("--dp-font-family-side",      c.fontFamilySide.value);
+        target.style.setProperty("--dp-font-size-side",        `${(c.fontSizeSide.value||9)*4/3}px`);
+        target.style.setProperty("--dp-border",       c.borderColor.value.value);
+        target.style.setProperty("--dp-border-width", `${c.borderWidth.value}px`);
+        target.style.setProperty("--dp-resizer-color",     c.resizerColor.value.value);
+        target.style.setProperty("--dp-resizer-thickness", `${c.resizerThickness.value||1}px`);
     }
 
     // ── CLOSED BAR ───────────────────────────────────────────────────────────
@@ -331,7 +301,9 @@ export class Visual implements IVisual {
         if(this.dialogOpen) return;
         this.dialogOpen=true;
         const c=this.fmtSettings?.dataColors;
-        const b=this.fmtSettings?.border;
+        const go=this.fmtSettings?.granularityOptions;
+        const granVisibleForDialog:Record<Gran,boolean>={D:false,W:false,M:false,Q:false,S:false,Y:false};
+        this.granOptions.forEach(g=>granVisibleForDialog[g]=true);
         const state:DialogInitialState={
             gran:this.gran, lang:this.lang,
             rangeStart:this.rangeS?.toISOString()||null,
@@ -343,25 +315,60 @@ export class Visual implements IVisual {
             dataMinDate:this.dataMinDate?this.dataMinDate.toISOString():null,
             dataMaxDate:this.dataMaxDate?this.dataMaxDate.toISOString():null,
             granMode:this.granMode, granOptions:this.granOptions, granSelected:this.granSelected,
+            showAutoGranToggle: go?.showAutoGranToggle.value ?? true,
+            applyImmediate: this.applyImmediate,
+            granAutoDefault: this.granAutoRuntime,
+            granVisible: granVisibleForDialog,
+            granThresholds: go
+                ? {W:go.granWThreshold.value,M:go.granMThreshold.value,Q:go.granQThreshold.value,S:go.granSThreshold.value,Y:go.granYThreshold.value}
+                : {W:2,M:2,Q:2,S:2,Y:2},
+            lockResizers: this.fmtSettings?.displayMode?.lockResizers.value ?? false,
             colors:{
                 bg:c?.backgroundColor.value.value||"#1e3055",
+                bgOpacity:c?.backgroundOpacity.value??0,
                 panel:c?.panelColor.value.value||"#16243f",
+                panelOpacity:c?.panelOpacity.value??0,
                 accent:c?.accentColor.value.value||"#2d6bc4",
                 title:c?.titleColor.value.value||"#9ab0cc",
                 value:c?.valueColor.value.value||"#ffffff",
                 accentText:c?.accentTextColor.value.value||"#ffffff",
-                borderColor:b?.borderColor.value.value||"#2d4470",
-                borderWidth:b?.borderWidth.value??1
+                borderColor:c?.borderColor.value.value||"#2d4470",
+                borderWidth:c?.borderWidth.value??1,
+                resizerColor:c?.resizerColor.value.value||"#2d4470",
+                resizerThickness:c?.resizerThickness.value??1,
+                fontFamilyGran:c?.fontFamilyGran.value??"Segoe UI",
+                fontSizeGran:c?.fontSizeGran.value??7,
+                fontFamilyShortcuts:c?.fontFamilyShortcuts.value??"Segoe UI",
+                fontSizeShortcuts:c?.fontSizeShortcuts.value??9,
+                fontFamilyContent:c?.fontFamilyContent.value??"Segoe UI",
+                fontSizeContent:c?.fontSizeContent.value??9,
+                fontFamilySide:c?.fontFamilySide.value??"Segoe UI",
+                fontSizeSide:c?.fontSizeSide.value??9
             }
         };
-        // Position the dialog directly below the visual instead of centering it on
-        // screen — available since API v4.0 (we're on 5.3.0). "top" can't be negative
-        // (would place it above the visual), so we measure the visual's own rendered
-        // height and use that as the vertical offset.
+        // RelativeToVisual (positioning the dialog near the visual) can't be auto-corrected
+        // with client-side math: confirmed via a debug log that this.root.getBoundingClientRect()
+        // and window.innerWidth only ever see this visual's own small sandboxed rendering
+        // area (windowInnerWidth came back as exactly this widget's own width, visualRect.left
+        // as 0 regardless of where the visual actually sits on the report page) — there's no
+        // coordinate readable from here that reflects the real page position, so nothing
+        // computed in this function can know which side is safe to extend the popup toward.
+        // That's what popupHorizontalAnchor is for: the report author knows where they put
+        // the visual, even though the code doesn't — "right" (default) extends the popup
+        // rightward from the visual's own left edge (matches the plain behavior this
+        // shipped with for most of this feature's life); "left" extends it leftward from
+        // the visual's own right edge instead, for reports where the visual sits close to
+        // the page's right margin (the one case with a known, minor issue — an occasional
+        // scrollbar — in the default direction).
         const visualRect = this.root.getBoundingClientRect();
+        const dm = this.fmtSettings?.displayMode;
+        const popupWidth = dm?.popupWidth.value ?? 480;
+        const popupHeight = dm?.popupHeight.value ?? 440;
+        const anchorLeft = dm?.popupHorizontalAnchor.value.value !== "left";
+        const leftOffset = anchorLeft ? 0 : Math.round(visualRect.width - popupWidth);
         this.host.openModalDialog(DIALOG_ID,{
-            title:"", size:{width:580,height:500}, actionButtons:[],
-            position:{ type: VisualDialogPositionType.RelativeToVisual, left:0, top:Math.round(visualRect.height) }
+            title:"", size:{width:popupWidth,height:popupHeight}, actionButtons:[],
+            position:{ type: VisualDialogPositionType.RelativeToVisual, left:leftOffset, top:Math.round(visualRect.height) }
         },state)
         .then((result)=>{
             this.dialogOpen=false;
@@ -373,6 +380,8 @@ export class Visual implements IVisual {
                 this.rangeE=new Date(rs.rangeEnd||rs.rangeStart);
                 this.activeSC=rs.activeSC!==undefined?rs.activeSC:"manual";
                 if(rs.dynN!==undefined) this.dynN=rs.dynN;
+                if(rs.granAuto!==undefined){ this.granAutoRuntime=rs.granAuto; this.granAutoTouchedByViewer=true; }
+                if(rs.manualGran!==undefined) this.manualGranOverride=(rs.manualGran as Gran)??null;
                 this.applyFilter();
                 this.updateClosedLabel();
             }
@@ -439,21 +448,49 @@ export class Visual implements IVisual {
         const btnCancel=this.e("button","dp-pop-btn cancel") as HTMLButtonElement; btnCancel.textContent=this.t().cancel; btnCancel.addEventListener("click",()=>this.cancelInlineDraft());
         const btnApply=this.e("button","dp-pop-btn apply") as HTMLButtonElement; btnApply.textContent=this.t().apply; btnApply.addEventListener("click",()=>this.submitFromInline());
         btnRow.append(btnCancel,btnApply);
-        colSide.append(ws,we,this.footerInfo,btnRow);
+        colSide.append(ws,we);
+        const autoRowV=this.buildAutoGranRow(true);
+        if(autoRowV) colSide.append(autoRowV);
+        colSide.append(this.footerInfo,btnRow);
         this.footerBtnsRow=btnRow;
 
-        const granBar=this.buildGranBar();
+        const granBar=this.buildGranBar(true);
         const rowWrap=this.e("div","dp-horiz-row");
-        rowWrap.append(this.shortcutsEl,colCal,colSide);
-        if(granBar) root.append(granBar);
+        // Each of these three zones can, in principle, grow enough (especially combined)
+        // to push colCal below its own CSS min-width (200px) — and since the row has no
+        // horizontal scrollbar, that overflow doesn't get a scrollbar either: the excess
+        // just renders past the widget's right edge, unreachable. getMax() below caps
+        // each zone's growth to whatever colCal (at its floor) and the OTHER zones (at
+        // their current size) can actually spare, measured fresh on every drag frame —
+        // a static px cap could only ever be right for one particular widget width.
+        const dynMaxFor=(excludeEl:HTMLElement|null):number=>{
+            const zones=[granBar,this.shortcutsEl,colSide].filter((z):z is HTMLElement=>!!z && z!==excludeEl);
+            const zonesW=zones.reduce((sum,el)=>sum+el.getBoundingClientRect().width,0);
+            const resizersW=Array.from(rowWrap.querySelectorAll<HTMLElement>(".dp-resizer-col"))
+                .reduce((sum,el)=>sum+el.getBoundingClientRect().width,0);
+            return rowWrap.clientWidth-110/* .dp-horiz-cal min-width */-zonesW-resizersW;
+        };
+        if(granBar){
+            rowWrap.append(granBar);
+            rowWrap.append(this.addResizer("col",granBar,1,"hGranBar",26,90,()=>Math.max(26,dynMaxFor(granBar))));
+        }
+        rowWrap.append(
+            this.shortcutsEl, this.addResizer("col",this.shortcutsEl,1,"hShortcuts",0,320,()=>Math.max(0,dynMaxFor(this.shortcutsEl)),undefined,0.85,undefined,true),
+            colCal,
+            this.addResizer("col",colSide,-1,"hColSide",0,260,()=>Math.max(0,dynMaxFor(colSide)),72), colSide
+        );
         root.append(rowWrap);
+        this.updateGranPreviewInline();
     }
 
     // ── SHARED CALENDAR UI ───────────────────────────────────────────────────
     private buildCalendarUI(root:HTMLElement){
         root.className="dp-inline-root";
         const granBar=this.buildGranBar();
-        if(granBar) root.append(granBar);
+        if(granBar){
+            root.append(granBar);
+            root.append(this.addResizer("row",granBar,1,"vGranBar",10,110));
+        }
         const body=this.e("div","dp-pop-body");
         this.shortcutsEl=this.e("div","dp-pop-shortcuts");
         const cal=this.e("div","dp-pop-cal");
@@ -471,10 +508,15 @@ export class Visual implements IVisual {
         this.inE.addEventListener("focus",()=>this.setEditingField("end"));
         we.append(le,this.inE); this.inputWrapEnd=we;
         di.append(ws,we);
+        // Start/End is now a full-width strip of its own — a root-level sibling of `body`,
+        // not nested inside the calendar column — so it gets its own independent resizer
+        // and dragging the shortcuts↔calendar divider (which only ever should change
+        // WIDTH) can no longer squeeze its height as a side effect.
+        root.append(di, this.addResizer("row",di,1,"vDateInputs",0,80,undefined,46,undefined,46));
         this.calAreaEl=this.e("div","dp-cal-area");
-        cal.append(di,this.calAreaEl);
+        cal.append(this.calAreaEl);
         this.buildCalArea();
-        body.append(this.shortcutsEl,cal);
+        body.append(this.shortcutsEl, this.addResizer("col",this.shortcutsEl,1,"vShortcuts",0,320,undefined,undefined,0.85,undefined,true), cal);
         const footer=this.e("div","dp-pop-footer");
         this.footerInfo=this.e("span","dp-pop-info");
         const footerBtns=this.e("div","dp-pop-footer-btns");
@@ -482,8 +524,33 @@ export class Visual implements IVisual {
         const btnApply=this.e("button","dp-pop-btn apply") as HTMLButtonElement; btnApply.textContent=this.t().apply; btnApply.addEventListener("click",()=>this.submitFromInline());
         footerBtns.append(btnCancel,btnApply);
         footer.append(this.footerInfo,footerBtns);
-        root.append(body,footer);
+        const autoRow=this.buildAutoGranRow(false);
+        // Everything from here down (shortcuts+calendar, Auto/Man., footer) is what
+        // "Mostrar apenas ao passar o rato" hides by default — granularity and Início/Fim,
+        // built above, always stay visible regardless of that setting. Grouped in one
+        // wrapper purely so the hover toggle only has one element to show/hide, not four.
+        const revealWrap=this.e("div","dp-hover-reveal");
+        revealWrap.append(body);
+        if(autoRow){
+            revealWrap.append(this.addResizer("row",autoRow,-1,"vAutoRow",0,140));
+            revealWrap.append(autoRow);
+        }
+        revealWrap.append(this.addResizer("row",footer,-1,"vFooter",18,200));
+        revealWrap.append(footer);
+        root.append(revealWrap);
+        if(this.hoverExpandEnabled){
+            // The hover classes go on this.wrap (the .dp-inline-mode outer element), not
+            // root (.dp-inline-root) — wrap has its OWN background (needed for the normal,
+            // non-hover case), and that background was never reacting to hover at all,
+            // just root's did. With root's background made transparent while collapsed,
+            // that left wrap's own opaque background showing through underneath it, which
+            // is what kept looking solid regardless of the "área expansível" setting.
+            this.wrap.classList.add("dp-hover-mode");
+            this.wrap.addEventListener("mouseenter",()=>this.wrap.classList.add("dp-hover-active"));
+            this.wrap.addEventListener("mouseleave",()=>this.wrap.classList.remove("dp-hover-active"));
+        }
         this.footerBtnsRow=footerBtns;
+        this.updateGranPreviewInline();
     }
 
     // ── ADAPTIVE CALENDAR AREA (v2.0) ───────────────────────────────────────────
@@ -510,21 +577,66 @@ export class Visual implements IVisual {
         return this.dataMaxDate.getFullYear()-this.dataMinDate.getFullYear()+1;
     }
     private static readonly Q_MAX_ROWS=6; // never more than 6 rows, or it gets hard to read
+    // Set by fitPeriodWindowToHeight() from the actually-available pixel height — when the
+    // widget (or a dragged zone) leaves less room than the data-span window needs, this trims
+    // the window down to what fits, instead of the old behaviour of rendering the full window
+    // and letting the grid overflow into a vertical scrollbar that could hide the current row
+    // entirely (reported: viewing Q3 26 required scrolling to find it). Anchored at calY (the
+    // window always ENDS at the year in view — see qWindowYears/sWindowYears/yWindowYears
+    // callers), so trimming always drops the OLDEST years first, keeping the current one visible.
+    private measuredRowCap: number|null = null;
+    private periodResizeObserver: ResizeObserver|null = null;
+    private autoGranResizeObserver: ResizeObserver|null = null;
+    private static readonly MIN_ROW_PX_VERTICAL=26;
+    private static readonly MIN_ROW_PX_HORIZONTAL=22; // matches the existing .dp-horiz-cal .dp-period-cell min-height
+    // `gridEl` is the direct .dp-period-grid(wrap) parent, already flex-sized by CSS regardless
+    // of its (possibly not yet populated) content — safe to measure before rendering cells.
+    private fitPeriodWindowToHeight(gridEl:HTMLElement):void{
+        if(this.gran!=="Q" && this.gran!=="S" && this.gran!=="Y"){ this.measuredRowCap=null; return; }
+        const availH=gridEl.clientHeight;
+        if(availH<=0){ this.measuredRowCap=null; return; }
+        const minRow=this.currentMode==="inline-horizontal"?Visual.MIN_ROW_PX_HORIZONTAL:Visual.MIN_ROW_PX_VERTICAL;
+        const gap=4; // matches .dp-period-grid { gap: 4px }
+        this.measuredRowCap=Math.max(1,Math.floor((availH+gap)/(minRow+gap)));
+    }
+    // `gridEl` is .dp-pop-grid, already in the DOM with a real width by the time this runs.
+    // Re-checked on every resize (widget resize, or dragging a neighbouring zone), not just
+    // once at build time — a one-shot check at whatever width happened to be current when
+    // the day grid was built would go stale the moment the widget's width changes without
+    // a granularity switch to trigger a fresh buildCalArea() call.
+    private static readonly MIN_PX_PER_WEEKDAY_COL=29; // ~what 3 uppercase letters need at this font, plus breathing room
+    private fitWeekdayHeaderToWidth(gridEl:HTMLElement):void{
+        if(this.gran!=="D") return;
+        const t=this.t();
+        const cells=gridEl.querySelectorAll<HTMLElement>(".dp-pop-wd:not(.dp-pop-wn-header)");
+        if(cells.length===0) return;
+        const useShort=gridEl.clientWidth>0 && gridEl.clientWidth<Visual.MIN_PX_PER_WEEKDAY_COL*7.65;
+        cells.forEach((c,i)=>{ c.textContent=(useShort?t.wdaysShort[i]:t.wdays[i])??t.wdays[i]; });
+    }
     private qWindowYears():number{
         const span=this.dataYearSpan();
-        const cap=Math.min(Visual.Q_MAX_ROWS,Math.floor(Visual.MAX_PERIOD_CELLS/4));
+        let cap=Math.min(Visual.Q_MAX_ROWS,Math.floor(Visual.MAX_PERIOD_CELLS/4));
+        if(this.measuredRowCap!==null) cap=Math.min(cap,this.measuredRowCap); // 1 year per row for Q
         return span!==null?Math.min(span,cap):Math.min(Visual.Q_WINDOW_YEARS_FALLBACK,cap);
     }
     private static readonly S_MAX_ROWS=6; // 6 columns × 6 rows = 36 cells max
     private sWindowYears():number{
         const span=this.dataYearSpan();
-        const cap=Math.min(Visual.S_MAX_ROWS*3,Math.floor(Visual.MAX_PERIOD_CELLS/2)); // 3 years per row at 6 cols
+        let cap=Math.min(Visual.S_MAX_ROWS*3,Math.floor(Visual.MAX_PERIOD_CELLS/2)); // 3 years per row at 6 cols
+        if(this.measuredRowCap!==null) cap=Math.min(cap,this.measuredRowCap*3); // 3 years per row for S
         return span!==null?Math.min(span,cap):Math.min(Visual.S_WINDOW_YEARS_FALLBACK,cap);
     }
 
     private buildCalArea(){
         if(!this.calAreaEl) return;
         this.calAreaEl.replaceChildren();
+        // Granularity-scoped class so the header (yrlabel / month+year selects) can track
+        // whatever adaptive font-size reduction the grid cells use for this granularity —
+        // see the .dp-cal-area-q/-s/-w rules — without duplicating the per-gran reduction
+        // logic on the header's own selector chain.
+        this.calAreaEl.className="dp-cal-area dp-cal-area-"+this.gran.toLowerCase();
+        this.periodResizeObserver?.disconnect();
+        this.periodResizeObserver=null;
         const isDayGrid=this.gran==="D";
         const isSingleYear=this.gran==="M"||this.gran==="W";
         this.calY=this.clampCalY(this.calY);
@@ -568,6 +680,26 @@ export class Visual implements IVisual {
             grid.append(this.calDaysEl);
         }
         this.calAreaEl.append(ch,grid);
+        if(isDayGrid){
+            this.fitWeekdayHeaderToWidth(grid);
+            this.periodResizeObserver=new ResizeObserver(()=>this.fitWeekdayHeaderToWidth(grid));
+            this.periodResizeObserver.observe(grid);
+        }
+        if(!isDayGrid && !isSingleYear){
+            // Measure once now (covers granularity/mode switches), then keep watching —
+            // dragging a neighbouring zone bigger (footer, shortcuts, etc.) shrinks this
+            // grid's available height without ever calling buildCalArea() again, so a
+            // one-shot measurement alone would go stale the moment the user resizes.
+            this.fitPeriodWindowToHeight(grid);
+            this.periodResizeObserver=new ResizeObserver(()=>{
+                const before=this.measuredRowCap;
+                this.fitPeriodWindowToHeight(grid);
+                if(this.measuredRowCap!==before){ this.syncSel(); this.renderCalendarBody(); }
+            });
+            this.periodResizeObserver.observe(grid);
+        } else {
+            this.measuredRowCap=null;
+        }
         this.syncSel();
         this.renderCalendarBody();
     }
@@ -598,7 +730,9 @@ export class Visual implements IVisual {
     private static readonly Y_WINDOW_YEARS_FALLBACK=12;
     private yWindowYears():number{
         const span=this.dataYearSpan();
-        return span!==null?Math.min(span,12):Visual.Y_WINDOW_YEARS_FALLBACK;
+        let cap=12;
+        if(this.measuredRowCap!==null) cap=Math.min(cap,this.measuredRowCap*4); // 4 years per row for Y
+        return span!==null?Math.min(span,cap):Math.min(Visual.Y_WINDOW_YEARS_FALLBACK,cap);
     }
 
     // Clamps calY to whatever the current granularity's window semantics allow,
@@ -754,13 +888,115 @@ export class Visual implements IVisual {
 
     // ── SHORTCUTS ────────────────────────────────────────────────────────────
     private granBarEl: HTMLElement|null = null;
-    private buildGranBar():HTMLElement|null{
+    /** Shared between inline-vertical and inline-horizontal (popup has its own, separate
+     * implementation in dialog.ts, since that runs as an isolated bundle). `vertical=true`
+     * stacks the controls top-to-bottom for the horizontal layout's side column, where there's
+     * no room for a full-width row. */
+    private buildAutoGranRow(vertical:boolean):HTMLElement|null{
+        const go=this.fmtSettings?.granularityOptions;
+        if(!(go?go.showAutoGranToggle.value:true)) return null;
+        const t=this.t();
+        const row=this.e("div", vertical?"dp-autogran-row dp-autogran-vertical":"dp-autogran-row");
+
+        const toggleWrap=this.e("div","dp-autogran-toggle");
+        const btnAuto=this.e("button","dp-autogran-btn") as HTMLButtonElement;
+        const btnManual=this.e("button","dp-autogran-btn") as HTMLButtonElement;
+        // Short labels everywhere now (not just the vertical/side-column variant) — the
+        // long "Automatic"/"Manual" words rarely earned their width; full word still
+        // shows on hover via title.
+        btnAuto.textContent=t.autoLabelShort;
+        btnManual.textContent=t.manualLabelShort;
+        btnAuto.title=t.autoLabel; btnManual.title=t.manualLabel;
+        const refreshBtns=()=>{
+            btnAuto.classList.toggle("active",this.granAutoRuntime);
+            btnManual.classList.toggle("active",!this.granAutoRuntime);
+        };
+        btnAuto.addEventListener("click",()=>{
+            if(!this.granAutoRuntime){
+                this.granAutoRuntime=true; this.granAutoTouchedByViewer=true; refreshBtns(); this.updateGranPreviewInline();
+                if(this.applyImmediate) this.applyFilter();
+            }
+        });
+        btnManual.addEventListener("click",()=>{
+            if(this.granAutoRuntime){
+                this.granAutoRuntime=false; this.granAutoTouchedByViewer=true;
+                this.manualGranOverride=(this.granSelected??this.gran) as Gran; // always = whatever's selected at top at this exact moment
+                this.manualGranSelectInline.value=this.manualGranOverride;
+                refreshBtns(); this.updateGranPreviewInline();
+                if(this.applyImmediate) this.applyFilter();
+            }
+        });
+        toggleWrap.append(btnAuto,btnManual);
+
+        const infoIcon=this.e("span","dp-autogran-info");
+        infoIcon.textContent="ⓘ";
+        infoIcon.title=t.autoTooltip;
+
+        this.manualGranSelectInline=document.createElement("select");
+        this.manualGranSelectInline.className="dp-autogran-select";
+        this.granOptions.forEach(g=>{
+            const o=document.createElement("option");
+            o.value=g; o.textContent=t.granLabels[g as Gran]||g;
+            this.manualGranSelectInline.append(o);
+        });
+        this.manualGranSelectInline.addEventListener("change",()=>{
+            this.manualGranOverride=this.manualGranSelectInline.value as Gran;
+            this.updateGranPreviewInline();
+            if(this.applyImmediate) this.applyFilter();
+        });
+
+        this.effectiveGranLblInline=this.e("span","dp-autogran-effective");
+
+        const infoAppliedRow=this.e("div","dp-autogran-info-row");
+        infoAppliedRow.append(infoIcon,this.effectiveGranLblInline);
+        row.append(toggleWrap,this.manualGranSelectInline,infoAppliedRow);
+        this.autoGranRowInline=row;
+        refreshBtns();
+        this.manualGranSelectInline.value=this.manualGranOverride??((this.granSelected??this.gran) as Gran);
+        // The "Applied: X" label only re-measures when updateGranPreviewInline() is
+        // explicitly called (gran/mode change, toggle click, dropdown change) — none of
+        // which fire on a plain resize (widget resize, or dragging a neighbouring zone
+        // that shrinks this row). Without this, the label can go stale at its last-computed
+        // width and then genuinely clip mid-word rather than switching to the single letter.
+        this.autoGranResizeObserver?.disconnect();
+        this.autoGranResizeObserver=new ResizeObserver(()=>this.updateGranPreviewInline());
+        this.autoGranResizeObserver.observe(row);
+        return row;
+    }
+
+    private updateGranPreviewInline(){
+        if(!this.autoGranRowInline||!this.effectiveGranLblInline) return;
+        const t=this.t();
+        this.manualGranSelectInline.style.display=this.granAutoRuntime?"none":"";
+        const literalGran=(this.granSelected??this.gran) as Gran;
+        let effective:Gran;
+        if(this.granAutoRuntime){
+            const go=this.fmtSettings?.granularityOptions;
+            if(go && this.draftRangeS && this.draftRangeE){
+                const visible:Record<Gran,boolean>={D:go.granD.value,W:go.granW.value,M:go.granM.value,Q:go.granQ.value,S:go.granS.value,Y:go.granY.value};
+                const threshold={W:go.granWThreshold.value,M:go.granMThreshold.value,Q:go.granQThreshold.value,S:go.granSThreshold.value,Y:go.granYThreshold.value};
+                effective=resolveEffectiveGran(literalGran,this.draftRangeS,this.draftRangeE,visible,threshold);
+            } else {
+                effective=literalGran;
+            }
+        } else {
+            effective=this.manualGranOverride??literalGran;
+        }
+        // Always the single letter now — the adaptive "full word, fall back to letter if
+        // it doesn't fit" version kept losing the race against live resizes in practice,
+        // and the letter is what's needed for space either way, so there's no reason to
+        // ever show the full word here at all.
+        this.effectiveGranLblInline.textContent=`${t.effectiveLabel}: ${effective}`;
+    }
+
+    private buildGranBar(vertical:boolean=false):HTMLElement|null{
         if(this.granMode!=="column"||this.granOptions.length<2) return null;
-        const bar=this.e("div","dp-gran-bar");
+        const bar=this.e("div", vertical?"dp-gran-bar dp-gran-bar-vertical":"dp-gran-bar");
         this.granOptions.forEach(opt=>{
             const btn=this.e("button","dp-gran-btn") as HTMLButtonElement;
             if(opt===this.granSelected) btn.classList.add("active");
-            btn.textContent=opt;
+            const badge=this.e("span","dp-gran-badge"); badge.textContent=opt;
+            btn.append(badge);
             btn.addEventListener("click",()=>this.selectGran(opt));
             bar.append(btn);
         });
@@ -777,6 +1013,11 @@ export class Visual implements IVisual {
     private buildShortcuts(){
         if(!this.shortcutsEl) return;
         this.shortcutsEl.replaceChildren();
+        this.shortcutsEl.classList.remove("dp-empty-collapsed");
+        if(this.scVisible["scShowAll"]===false){
+            this.shortcutsEl.classList.add("dp-empty-collapsed");
+            return;
+        }
         const t=this.t(); let prev=false;
         let firstDivider=true;
         SHORTCUTS.forEach(s=>{
@@ -799,15 +1040,18 @@ export class Visual implements IVisual {
         });
         // "Últimos N" — respect its visibility toggle too
         const dynVisible=this.scVisible["scDynamic"]!==false;
-        if(!dynVisible){ return; }
-        if(prev) this.shortcutsEl.append(this.e("div","dp-pop-div"));
-        const dyn=this.e("div","dp-pop-dyn");
+        if(!dynVisible){
+            this.shortcutsEl.classList.toggle("dp-empty-collapsed", this.shortcutsEl.children.length===0);
+            return;
+        }
+        // "Últimos N" now looks and sits like just one more line in the same list (see
+        // dp-pop-dyn's shared .dp-pop-sc styling) — no divider before it either, so the
+        // gap above it matches the gap between any other two shortcuts exactly.
+        const dyn=this.e("div","dp-pop-sc dp-pop-dyn");
         if(this.draftActiveSC==="dynamic") dyn.classList.add("active");
-        const dl=this.e("div","dp-pop-dynlbl"); dl.textContent=t.lastN;
-        dl.style.cursor="pointer";
-        dl.addEventListener("click",()=>recalc());
-        const row=this.e("div","dp-pop-dynrow");
-        row.style.cursor="pointer";
+        dyn.style.cursor="pointer";
+        dyn.addEventListener("click",(ev)=>{if((ev.target as HTMLElement)!==this.dynInput) recalc();});
+        const dl=this.e("span","dp-pop-dynlbl"); dl.textContent=t.lastN;
         const numBox=this.e("div","dp-pop-dynbox");
         this.dynInput=document.createElement("input");
         this.dynInput.className="dp-pop-dynin"; this.dynInput.type="number";
@@ -822,14 +1066,17 @@ export class Visual implements IVisual {
             this.syncSel(); this.renderCalendarBody(); this.syncInputs(); this.updateInfo();
             this.shortcutsEl.querySelectorAll(".dp-pop-sc").forEach(el=>el.classList.remove("active"));
             dyn.classList.add("active");
+            // Same rule as every other shortcut (doSC): in Immediate mode (inline only), a
+            // shortcut pick is a complete intent — apply now instead of waiting for a calendar
+            // cell click or explicit Apply that may never come.
+            if(this.applyImmediate && this.currentMode!=="popup"){
+                this.confirmDraft();
+            }
         };
-        // Clicking the unit label also activates
-        this.dynUnit=this.e("span","dp-pop-dynunit"); this.dynUnit.textContent=t.granLabels[this.gran];
-        this.dynUnit.style.cursor="pointer";
-        this.dynUnit.addEventListener("click",()=>recalc());
-        row.addEventListener("click",(ev)=>{if((ev.target as HTMLElement)!==this.dynInput) recalc();});
+        this.dynUnit=this.e("span","dp-pop-dynunit"); this.dynUnit.textContent=this.gran;
         this.dynInput.addEventListener("input",recalc);
         this.dynInput.addEventListener("change",recalc);
+        this.dynInput.addEventListener("click",(ev)=>ev.stopPropagation());
         this.dynInput.addEventListener("wheel",(ev)=>{
             ev.preventDefault();
             const cur=Math.max(1,+this.dynInput.value||1);
@@ -837,7 +1084,7 @@ export class Visual implements IVisual {
             recalc();
         },{passive:false});
         numBox.append(this.dynInput);
-        row.append(numBox,this.dynUnit); dyn.append(dl,row); this.shortcutsEl.append(dyn);
+        dyn.append(dl,numBox,this.dynUnit); this.shortcutsEl.append(dyn);
     }
 
     private doSC(id:string){
@@ -879,15 +1126,6 @@ export class Visual implements IVisual {
         }
     }
 
-    private isoWeekNumber(d:Date):number{
-        const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
-        const dayNum=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-dayNum+3);
-        const firstThursday=new Date(Date.UTC(t.getUTCFullYear(),0,4));
-        const firstDayNum=(firstThursday.getUTCDay()+6)%7;
-        firstThursday.setUTCDate(firstThursday.getUTCDate()-firstDayNum+3);
-        return 1+Math.round((t.getTime()-firstThursday.getTime())/(7*86400000));
-    }
-
     private renderDays(){
         if(!this.calDaysEl) return;
         this.calDaysEl.replaceChildren();
@@ -904,7 +1142,7 @@ export class Visual implements IVisual {
 
         for(let row=0;row<6;row++){
             const mondayOfRow=new Date(this.calY,this.calM,1+row*7-off);
-            const wn=this.isoWeekNumber(mondayOfRow);
+            const wn=isoWeekNumber(mondayOfRow);
             const wnCell=this.e("div","dp-pop-wn"); wnCell.textContent=String(wn);
             this.calDaysEl.append(wnCell);
             for(let col=0;col<7;col++){
@@ -989,11 +1227,8 @@ export class Visual implements IVisual {
     }
     private confirmInput(which:"start"|"end"){
         const input=which==="start"?this.inS:this.inE;
-        const raw=input.value;
-        const m=raw.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/);
-        if(!m){if(raw) input.classList.add("err"); return;}
-        const y=+m[3]<100?2000+ +m[3]:+m[3]; const parsed=new Date(y,+m[2]-1,+m[1]);
-        if(isNaN(parsed.getTime())){input.classList.add("err"); return;}
+        const parsed=parseDate(input.value);
+        if(!parsed){if(input.value) input.classList.add("err"); return;}
         input.classList.remove("err");
         if(which==="start"){this.draftRangeS=parsed;if(this.draftRangeE&&dMs(this.draftRangeE)<dMs(parsed)) this.draftRangeE=null;}
         else{this.draftRangeE=parsed;if(this.draftRangeS&&dMs(this.draftRangeS)>dMs(parsed)) this.draftRangeS=null;}
@@ -1010,14 +1245,30 @@ export class Visual implements IVisual {
     private updateInfo(){
         if(!this.footerInfo) return;
         const t=this.t();
-        if(this.picking){this.footerInfo.textContent=`${fmt(this.draftRangeS!)} ${t.clickEnd}`;return;}
-        if(!this.draftRangeS||!this.draftRangeE){this.footerInfo.textContent="";return;}
+        this.footerInfo.replaceChildren();
+        if(this.picking){
+            const s=document.createElement("span"); s.textContent=`${fmt(this.draftRangeS!)} ${t.clickEnd}`;
+            this.footerInfo.append(s);
+            this.updateGranPreviewInline(); return;
+        }
+        if(!this.draftRangeS||!this.draftRangeE){ this.updateGranPreviewInline(); return; }
         const diff=Math.round((dMs(this.draftRangeE)-dMs(this.draftRangeS))/86400000)+1;
         if(this.currentMode==="inline-horizontal"){
-            this.footerInfo.textContent=`${diff} ${t.days}`;
+            const daysSpan=document.createElement("span"); daysSpan.textContent=`${diff} ${t.days}`;
+            this.footerInfo.append(daysSpan);
         } else {
-            this.footerInfo.textContent=`${fmt(this.draftRangeS)} → ${fmt(this.draftRangeE)} (${diff} ${t.days})`;
+            // Three separate pieces instead of one long string — .dp-pop-info is now
+            // flex-wrap, so the browser can only ever break BETWEEN these (start date /
+            // "→ end date" / day count), never mid-date. That's what was producing the
+            // "01-10-" / "23" mid-number wrapping before: a single text node has no
+            // logical break points of its own, so the browser just wrapped at whatever
+            // character ran out of room.
+            const startSpan=document.createElement("span"); startSpan.textContent=fmt(this.draftRangeS);
+            const endSpan=document.createElement("span"); endSpan.textContent=`→ ${fmt(this.draftRangeE)}`;
+            const daysSpan=document.createElement("span"); daysSpan.textContent=`(${diff} ${t.days})`;
+            this.footerInfo.append(startSpan,endSpan,daysSpan);
         }
+        this.updateGranPreviewInline();
     }
 
     // ── SUBMIT / APPLY ────────────────────────────────────────────────────────
@@ -1061,12 +1312,20 @@ export class Visual implements IVisual {
     // reports as filtered even though all columns share the same restricted rows.
 
     // Called when the user clicks a granularity option in the selector (column mode only).
+    // This ONLY changes which calendar shape is shown (day grid vs week/month/quarter/
+    // semester/year grid) — it must never apply a filter by itself. Filters get sent when
+    // the viewer actually picks something: a date/range, a shortcut, or (in Manual mode)
+    // the override dropdown. Calling applyFilter() here used to re-run auto-downgrade
+    // against whatever OLD range was still applied (picked for a different granularity
+    // entirely), and the downgraded value would round-trip back and silently revert this
+    // very click a moment later — removing the call removes the race, not just one
+    // symptom of it.
     private selectGran(literal:string){
         if(literal===this.granSelected) return;
         this.granSelected=literal;
         const mapped=normalizeGran(literal);
         if(mapped) this.gran=mapped;
-        this.applyFilter();
+        this.granSelectedDiverged=true;
         // Same reset as a granChanged event: re-anchor to ref_date's year and rebuild
         // the calendar shape (day grid vs week/month/quarter/semester/year grid).
         const ref=new Date(this.refDate);
@@ -1074,6 +1333,7 @@ export class Visual implements IVisual {
         if(this.calAreaEl) this.buildCalArea();
         this.buildShortcuts();
         this.refreshGranBar();
+        this.updateGranPreviewInline();
     }
 
     private applyFilter(){
@@ -1119,7 +1379,16 @@ export class Visual implements IVisual {
             const granDot=granQn.indexOf(".");
             const granTbl=granDot>-1?granQn.slice(0,granDot):granQn;
             const granCol=granDot>-1?granQn.slice(granDot+1):this.granCat.source.displayName;
-            const literal=this.granSelected??this.gran;
+            const literalGran=(this.granSelected??this.gran) as Gran;
+            const go=this.fmtSettings?.granularityOptions;
+            let literal:Gran=literalGran;
+            if(this.granAutoRuntime && go){
+                const visible:Record<Gran,boolean>={D:go.granD.value,W:go.granW.value,M:go.granM.value,Q:go.granQ.value,S:go.granS.value,Y:go.granY.value};
+                const threshold={W:go.granWThreshold.value,M:go.granMThreshold.value,Q:go.granQThreshold.value,S:go.granSThreshold.value,Y:go.granYThreshold.value};
+                literal=resolveEffectiveGran(literalGran,s0,e0,visible,threshold);
+            } else if(!this.granAutoRuntime && this.manualGranOverride){
+                literal=this.manualGranOverride;
+            }
             const granFilter:pbModels.IBasicFilter={
                 $schema:pbModels.BasicFilter.schemaUrl,
                 target:{table:granTbl,column:granCol} as pbModels.IFilterColumnTarget,
@@ -1130,15 +1399,16 @@ export class Visual implements IVisual {
             filter=dateOnlyFilter;
         }
         this.host.applyJsonFilter(filter,"general","filter",FilterAction.merge);
+        this.granSelectedDiverged=false; // committed — normal gran-sync resumes on this fresh range
 
         // Persist the intent + the refDate used for this calculation.
         // Storing refUsed lets us distinguish a real day-change (refDate differs from
         // what's stored) from a mere page navigation (refDate matches) — so we only
         // recalculate when the day genuinely changed, never on every page switch.
         const refUsed = `${this.refDate.getFullYear()}-${this.refDate.getMonth()}-${this.refDate.getDate()}`;
-        const intent = JSON.stringify({activeSC:this.activeSC, dynN:this.dynN, gran:this.gran, refUsed});
+        this.lastIntent={...this.lastIntent, activeSC:this.activeSC, dynN:this.dynN, gran:this.gran, refUsed};
         this.host.persistProperties({
-            merge:[{ objectName:"general", selector:null, properties:{ state: intent } }]
+            merge:[{ objectName:"general", selector:null, properties:{ state: JSON.stringify(this.lastIntent) } }]
         });
     }
 
@@ -1150,13 +1420,16 @@ export class Visual implements IVisual {
             this.fmtSettings=this.fmtSvc.populateFormattingSettingsModel(VisualFormattingSettingsModel,dv);
             this.defaultType=(this.fmtSettings?.defaultPeriod?.defaultType?.value?.value as string)||"dynamic";
             this.applyImmediate=((this.fmtSettings?.displayMode?.applyMode?.value?.value as string)||"immediate")==="immediate";
+            this.hoverExpandEnabled=this.fmtSettings?.displayMode?.hoverExpand.value??false;
+            this.resizersLocked=this.fmtSettings?.displayMode?.lockResizers.value??false;
             const sc=this.fmtSettings?.shortcuts;
             if(sc){
                 this.scVisible={
+                    scShowAll:sc.scShowAll.value,
                     scToday:sc.scToday.value, scYesterday:sc.scYesterday.value, scThisWeek:sc.scThisWeek.value,
-                    scLastWeek:sc.scLastWeek.value, scThisMonth:sc.scThisMonth.value, scMtd:sc.scMtd.value,
-                    scQtd:sc.scQtd.value, scYtd:sc.scYtd.value, scThisQuarter:sc.scThisQuarter.value,
-                    scThisSemester:sc.scThisSemester.value, scThisYear:sc.scThisYear.value, scDynamic:sc.scDynamic.value
+                    scLastWeek:sc.scLastWeek.value, scThisMonth:sc.scThisMonth.value, scLastMonth:sc.scLastMonth.value, scMtd:sc.scMtd.value,
+                    scQtd:sc.scQtd.value, scYtd:sc.scYtd.value, scThisQuarter:sc.scThisQuarter.value, scLastQuarter:sc.scLastQuarter.value,
+                    scThisSemester:sc.scThisSemester.value, scLastSemester:sc.scLastSemester.value, scThisYear:sc.scThisYear.value, scDynamic:sc.scDynamic.value
                 };
             }
             // Which granularity buttons to show is a plain format-pane choice (like the
@@ -1167,6 +1440,9 @@ export class Visual implements IVisual {
             // risked destabilizing the wider report. Letting the report author simply
             // check which codes exist is simpler and can't break anything.
             const go=this.fmtSettings?.granularityOptions;
+            if(!this.granAutoTouchedByViewer){
+                this.granAutoRuntime = go?.autoGranularity.value ?? true;
+            }
             const granVisible:Record<Gran,boolean> = go
                 ? {D:go.granD.value,W:go.granW.value,M:go.granM.value,Q:go.granQ.value,S:go.granS.value,Y:go.granY.value}
                 : {D:true,W:true,M:true,Q:true,S:true,Y:true};
@@ -1178,6 +1454,10 @@ export class Visual implements IVisual {
             if(!dv){ this.showLandingPage(); this.events.renderingFinished(opts); return; }
             if(this.landingShown){ this.landingShown=false; this.rebuildForMode(); }
             let granChanged=false;
+            // Set when granChanged came from the auto-downgrade echo (picking a small range
+            // resolves to a lower effective granularity) rather than an explicit top-bar click
+            // — see the calY-anchoring branch below, which needs to tell these apart.
+            let granChangedViaSync=false;
             this.granCat=null;
             // dateColumn and granColumn share a single dataViewMapping again — two
             // separate mappings crashed Power BI Desktop's own dataview resolution
@@ -1280,6 +1560,24 @@ export class Visual implements IVisual {
             const granOptionsKey=this.granOptions.join(",");
             const granOptionsSetChanged=granOptionsKey!==this.lastGranOptionsKey;
             this.lastGranOptionsKey=granOptionsKey;
+            // Same problem, same fix, for the Auto/Manual switch's own visibility: toggling it
+            // doesn't touch this.gran or this.granOptions either, so nothing else here would
+            // have caught it and the inline UI (built once, not on every update()) would have
+            // silently kept showing/hiding the row based on stale state.
+            const showAutoGranToggleNow = go?go.showAutoGranToggle.value:true;
+            const showAutoGranToggleChanged = showAutoGranToggleNow!==this.lastShowAutoGranToggle;
+            this.lastShowAutoGranToggle = showAutoGranToggleNow;
+            // Same problem again: toggling "Mostrar apenas ao passar o rato" changes
+            // this.hoverExpandEnabled (read further down) without touching this.gran or
+            // this.granOptions either — the inline UI's hover wiring is only set up once,
+            // at build time, so without this the toggle would silently do nothing until
+            // some other change happened to force a rebuild.
+            const hoverExpandNow = this.fmtSettings?.displayMode?.hoverExpand.value??false;
+            const hoverExpandChanged = hoverExpandNow!==this.lastHoverExpand;
+            this.lastHoverExpand = hoverExpandNow;
+            const lockResizersNow = this.fmtSettings?.displayMode?.lockResizers.value??false;
+            const lockResizersChanged = lockResizersNow!==this.lastLockResizers;
+            this.lastLockResizers = lockResizersNow;
             // The granularity selector is a self-contained UI feature (it reshapes the
             // calendar itself — day grid vs week rows vs month/quarter/semester/year
             // tiles) and no longer depends on any bound data column. "column" mode is
@@ -1305,12 +1603,21 @@ export class Visual implements IVisual {
                 : (opts.jsonFilters ? [opts.jsonFilters] : []);
             const stateStr = dv.metadata?.objects?.["general"]?.["state"] as string|undefined;
 
-            // Restore the intent (activeSC + dynN) from persisted state
+            // Restore the intent (activeSC + dynN + sizes) from persisted state
             if(stateStr){
                 try{
-                    const intent = JSON.parse(stateStr) as {activeSC:string|null; dynN:number};
+                    const intent = JSON.parse(stateStr) as {activeSC:string|null; dynN:number; sizes?:Record<string,number>};
                     this.activeSC = intent.activeSC;
                     this.dynN = intent.dynN || 12;
+                    this.lastIntent = intent as Record<string,unknown>;
+                    // Only ever seed paneSizes from disk ONCE — after that, this.paneSizes
+                    // (kept current by every resize's onResize callback) is the source of
+                    // truth; re-reading it from a since-stale stateStr on a later update()
+                    // would silently undo a resize the user just made this session.
+                    if(!this.paneSizesLoaded){
+                        if(intent.sizes && typeof intent.sizes==="object") this.paneSizes={...intent.sizes};
+                        this.paneSizesLoaded=true;
+                    }
                 }catch(_){}
             }
 
@@ -1372,8 +1679,23 @@ export class Visual implements IVisual {
                 if(stateStr2){
                     try{ const intent=JSON.parse(stateStr2); if(typeof intent?.gran==="string") stateGran=intent.gran; }catch(_){}
                 }
-                const syncedGran = (synced?.gran && this.granOptions.includes(synced.gran)) ? synced.gran : null;
-                const stored = syncedGran || ((stateGran && this.granOptions.includes(stateGran)) ? stateGran : null);
+                // While Manual mode has an active override, the applied filter's own granularity
+                // (synced.gran, read back from opts.jsonFilters for cross-page sync) is DELIBERATELY
+                // different from this.gran/calendar shape — that's the entire point of Manual mode.
+                // Using it to "sync" the shape back here would just fight every click on the top
+                // selector. The persisted intent (stateGran, written from this.gran itself) is the
+                // right source of truth for the shape in that case.
+                //
+                // granSelectedDiverged (set by selectGran(), cleared by applyFilter()) covers the
+                // other case: a top-bar click that only changed the shape, with nothing new applied
+                // yet. Skipping the whole adoption block while that's true means the still-stale
+                // applied filter can't revert a browse-only click no matter how many update() cycles
+                // pass before the viewer actually commits something — at which point applyFilter()
+                // clears the flag and normal syncing (including the desired auto-downgrade-on-a-
+                // too-small-range behaviour, which never sets this flag in the first place) resumes.
+                const manualOverrideActive = !this.granAutoRuntime && !!this.manualGranOverride;
+                const syncedGran = (!manualOverrideActive && !this.granSelectedDiverged && synced?.gran && this.granOptions.includes(synced.gran)) ? synced.gran : null;
+                const stored = this.granSelectedDiverged ? null : (syncedGran || ((stateGran && this.granOptions.includes(stateGran)) ? stateGran : null));
                 let literal = stored;
                 // Only fall back to a default when we've never established a value yet
                 // (very first load). A momentarily-missing readback later on just means
@@ -1385,7 +1707,7 @@ export class Visual implements IVisual {
                 if(literal && literal!==this.granSelected){
                     this.granSelected=literal;
                     const mapped=normalizeGran(literal);
-                    if(mapped && mapped!==this.gran){ this.gran=mapped; granChanged=true; }
+                    if(mapped && mapped!==this.gran){ this.gran=mapped; granChanged=true; granChangedViaSync=(literal===syncedGran); }
                 }
             } else {
                 this.granSelected=null;
@@ -1415,7 +1737,7 @@ export class Visual implements IVisual {
                 this.refreshCalendarUI();
             };
 
-            if(modeChanged || (granOptionsSetChanged && this.currentMode!=="popup")){
+            if(modeChanged || ((granOptionsSetChanged||showAutoGranToggleChanged||hoverExpandChanged||lockResizersChanged) && this.currentMode!=="popup")){
                 this.rebuildForMode();
             } else {
                 this.applyColors(this.wrap);
@@ -1424,18 +1746,24 @@ export class Visual implements IVisual {
                 // switches between the day grid and the month/quarter/semester/year grid.
                 const calAreaVisible=this.currentMode!=="popup";
                 if(granChanged&&calAreaVisible&&this.calAreaEl){
-                    // Always re-anchor to ref_date's year on a granularity switch —
-                    // never to whatever the current selection happens to be, even if
-                    // that selection sits near the end of the data table.
-                    const ref=new Date(this.refDate);
-                    this.calY=ref.getFullYear(); this.calM=ref.getMonth();
+                    // Re-anchor to ref_date's year on an explicit top-bar granularity click —
+                    // but when the shape changed because auto-downgrade echoed back a lower
+                    // effective granularity for the range the viewer just picked (e.g. picking
+                    // S2 22 with too few points, landing on Q), anchor to THAT range instead:
+                    // ref_date's year would show a Q window nowhere near the actual selection.
+                    if(granChangedViaSync && this.rangeE){
+                        this.calY=this.rangeE.getFullYear(); this.calM=this.rangeE.getMonth();
+                    } else {
+                        const ref=new Date(this.refDate);
+                        this.calY=ref.getFullYear(); this.calM=ref.getMonth();
+                    }
                     this.buildCalArea();
                 }
                 if(granChanged) this.refreshGranBar();
                 if(this.currentMode==="popup"){
                     this.updateClosedLabel();
                 } else {
-                    if(this.dynUnit) this.dynUnit.textContent=this.t().granLabels[this.gran];
+                    if(this.dynUnit) this.dynUnit.textContent=this.gran;
                     if(draftWasClean) syncDraftToApplied();
                     else this.buildShortcuts();
                 }
@@ -1467,6 +1795,27 @@ export class Visual implements IVisual {
     }
 
     public getFormattingModel():powerbi.visuals.FormattingModel{
+        // Conditional visibility: these settings only apply to specific layout modes, so
+        // showing them regardless of the current mode would just be confusing — a "Popup
+        // width" control sitting there while Inline Vertical is selected doesn't do
+        // anything. Set right before building the model each time, since layoutMode can
+        // change between calls.
+        const dm=this.fmtSettings?.displayMode;
+        if(dm){
+            const mode=dm.layoutMode.value.value as string;
+            dm.hoverExpand.visible=mode==="inline-vertical";
+            const isPopup=mode==="popup";
+            dm.popupWidth.visible=isPopup;
+            dm.popupHeight.visible=isPopup;
+            dm.popupHorizontalAnchor.visible=isPopup;
+        }
         return this.fmtSvc.buildFormattingModel(this.fmtSettings);
+    }
+
+    public destroy():void{
+        this.periodResizeObserver?.disconnect();
+        this.periodResizeObserver=null;
+        this.autoGranResizeObserver?.disconnect();
+        this.autoGranResizeObserver=null;
     }
 }

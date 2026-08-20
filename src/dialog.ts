@@ -3,112 +3,11 @@ import powerbi from "powerbi-visuals-api";
 import "./../style/dialog.less";
 import DialogConstructorOptions = powerbi.extensibility.visual.DialogConstructorOptions;
 import IDialogHost              = powerbi.extensibility.visual.IDialogHost;
-
-type Gran = "D"|"W"|"M"|"Q"|"S"|"Y";
-type Lang = "PT"|"EN";
-
-
-
-const GRAN_ALIASES: Record<Gran,string[]> = {
-    D:["d","dia","dias","day","days","diário","diario","daily"],
-    W:["w","semana","semanas","week","weeks","semanal","weekly"],
-    M:["m","mes","mês","meses","month","months","mensal","monthly"],
-    Q:["q","trimestre","trimestres","quarter","quarters","trimestral","quarterly"],
-    S:["s","semestre","semestres","semester","semesters","semestral"],
-    Y:["y","ano","anos","year","years","anual","annual","yearly"]
-};
-function normalizeGran(raw:string):Gran|null{
-    const k=raw.trim().toLowerCase();
-    for(const g of ["D","W","M","Q","S","Y"] as Gran[]) if(GRAN_ALIASES[g].includes(k)) return g;
-    return null;
-}
-
-const I18N_SC: Record<Lang,{
-    today:string; yesterday:string; thisWeek:string; lastWeek:string; thisMonth:string;
-    mtd:string; qtd:string; ytd:string;
-    thisQuarter:string; thisSemester:string; thisYear:string;
-    lastN:string; granLabels:Record<Gran,string>;
-    apply:string; cancel:string; start:string; end:string;
-    clickEnd:string; days:string; months:string[]; wdays:string[];
-}> = {
-    PT:{
-        today:"Hoje",yesterday:"Ontem",thisWeek:"Esta Semana",lastWeek:"Semana Passada",
-        thisMonth:"Este Mês",mtd:"Mês até à Data",qtd:"Trimestre até à Data",ytd:"Ano até à Data",
-        thisQuarter:"Este Trimestre",thisSemester:"Este Semestre",thisYear:"Este Ano",
-        lastN:"Últimos",granLabels:{D:"Dias",W:"Semanas",M:"Meses",Q:"Trimestres",S:"Semestres",Y:"Anos"},
-        apply:"Aplicar",cancel:"Cancelar",start:"Início",end:"Fim",
-        clickEnd:"→ clica para definir o fim",days:"dias",
-        months:["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"],
-        wdays:["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-    },
-    EN:{
-        today:"Today",yesterday:"Yesterday",thisWeek:"This Week",lastWeek:"Last Week",
-        thisMonth:"This Month",mtd:"Month to Date",qtd:"Quarter to Date",ytd:"Year to Date",
-        thisQuarter:"This Quarter",thisSemester:"This Semester",thisYear:"This Year",
-        lastN:"Last",granLabels:{D:"Days",W:"Weeks",M:"Months",Q:"Quarters",S:"Semesters",Y:"Years"},
-        apply:"Apply",cancel:"Cancel",start:"Start",end:"End",
-        clickEnd:"→ click to set end date",days:"days",
-        months:["January","February","March","April","May","June","July","August","September","October","November","December"],
-        wdays:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-    }
-};
-
-const SHORTCUTS:{id:string;labelKey:string;visibleFor:Gran[];settingKey:string}[]=[
-    {id:"today",       labelKey:"today",        visibleFor:["D"],                settingKey:"scToday"},
-    {id:"yesterday",   labelKey:"yesterday",    visibleFor:["D"],                settingKey:"scYesterday"},
-    {id:"thisWeek",    labelKey:"thisWeek",     visibleFor:["D","W"],            settingKey:"scThisWeek"},
-    {id:"lastWeek",    labelKey:"lastWeek",     visibleFor:["D","W"],            settingKey:"scLastWeek"},
-    {id:"thisMonth",   labelKey:"thisMonth",    visibleFor:["D","M"],            settingKey:"scThisMonth"},
-    {id:"mtd",         labelKey:"mtd",          visibleFor:["D","M"],            settingKey:"scMtd"},
-    {id:"qtd",         labelKey:"qtd",          visibleFor:["D","M","Q"],        settingKey:"scQtd"},
-    {id:"ytd",         labelKey:"ytd",          visibleFor:["D","M","Q","S","Y"],settingKey:"scYtd"},
-    {id:"thisQuarter", labelKey:"thisQuarter",  visibleFor:["D","M","Q"],        settingKey:"scThisQuarter"},
-    {id:"thisSemester",labelKey:"thisSemester", visibleFor:["D","M","Q","S"],    settingKey:"scThisSemester"},
-    {id:"thisYear",    labelKey:"thisYear",     visibleFor:["D","M","Q","S","Y"],settingKey:"scThisYear"},
-];
-
-const d0=(d:Date)=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
-const dMs=(d:Date)=>d0(d).getTime();
-const same=(a:Date,b:Date)=>dMs(a)===dMs(b);
-const fmt=(d:Date)=>`${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getFullYear()).slice(-2)}`;
-function parseDate(s:string):Date|null{const m=s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/);if(!m)return null;const y=+m[3]<100?2000+ +m[3]:+m[3];const r=new Date(y,+m[2]-1,+m[1]);return isNaN(r.getTime())?null:r;}
-function startOfWeekMon(d:Date){const r=new Date(d);const dw=r.getDay();r.setDate(r.getDate()+(dw===0?-6:1-dw));r.setHours(0,0,0,0);return r;}
-function isoWeekNumber(d:Date):number{
-    const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
-    const dayNum=(t.getUTCDay()+6)%7;
-    t.setUTCDate(t.getUTCDate()-dayNum+3);
-    const firstThursday=new Date(Date.UTC(t.getUTCFullYear(),0,4));
-    const firstDayNum=(firstThursday.getUTCDay()+6)%7;
-    firstThursday.setUTCDate(firstThursday.getUTCDate()-firstDayNum+3);
-    return 1+Math.round((t.getTime()-firstThursday.getTime())/(7*86400000));
-}
-
-function calRange(today:Date,n:number,g:Gran):{s:Date,e:Date}{
-    switch(g){
-        case "D":return{s:d0(new Date(today.getTime()-n*86400000)),e:d0(today)};
-        case "W":{const sw=startOfWeekMon(today);const s=new Date(sw);s.setDate(s.getDate()-(n-1)*7);const e=new Date(sw);e.setDate(e.getDate()+6);return{s,e};}
-        case "M":{const s=new Date(today.getFullYear(),today.getMonth()-n+1,1);const e=new Date(today.getFullYear(),today.getMonth()+1,0);return{s,e};}
-        case "Q":{const cq=Math.floor(today.getMonth()/3);const s=new Date(today.getFullYear(),cq*3-(n-1)*3,1);const e=new Date(today.getFullYear(),cq*3+3,0);return{s,e};}
-        case "S":{const cs=today.getMonth()<6?0:1;const s=new Date(today.getFullYear(),cs*6-(n-1)*6,1);const e=new Date(today.getFullYear(),cs*6+6,0);return{s,e};}
-        case "Y":{return{s:new Date(today.getFullYear()-n+1,0,1),e:new Date(today.getFullYear(),11,31)};}
-    }
-}
-function shortcutRange(id:string,today:Date):{s:Date,e:Date}|null{
-    switch(id){
-        case "today":return{s:d0(today),e:d0(today)};
-        case "yesterday":{const y=new Date(today);y.setDate(y.getDate()-1);return{s:d0(y),e:d0(y)};}
-        case "thisWeek":{const sw=startOfWeekMon(today);const ew=new Date(sw);ew.setDate(ew.getDate()+6);return{s:sw,e:ew};}
-        case "lastWeek":{const sw=startOfWeekMon(today);sw.setDate(sw.getDate()-7);const ew=new Date(sw);ew.setDate(ew.getDate()+6);return{s:sw,e:ew};}
-        case "thisMonth":return{s:new Date(today.getFullYear(),today.getMonth(),1),e:new Date(today.getFullYear(),today.getMonth()+1,0)};
-        case "thisQuarter":{const q=Math.floor(today.getMonth()/3);return{s:new Date(today.getFullYear(),q*3,1),e:new Date(today.getFullYear(),q*3+3,0)};}
-        case "thisSemester":{const sm=today.getMonth()<6?0:6;return{s:new Date(today.getFullYear(),sm,1),e:new Date(today.getFullYear(),sm+6,0)};}
-        case "thisYear":return{s:new Date(today.getFullYear(),0,1),e:new Date(today.getFullYear(),11,31)};
-        case "mtd":return{s:new Date(today.getFullYear(),today.getMonth(),1),e:d0(today)};
-        case "qtd":{const q=Math.floor(today.getMonth()/3);return{s:new Date(today.getFullYear(),q*3,1),e:d0(today)};}
-        case "ytd":return{s:new Date(today.getFullYear(),0,1),e:d0(today)};
-        default:return null;
-    }
-}
+import { attachResizer } from "./resize";
+import {
+    Gran, Lang, normalizeGran, I18N, SHORTCUTS,
+    dMs, same, fmt, resolveEffectiveGran, calRange, shortcutRange, parseDate, isoWeekNumber
+} from "./shared";
 
 export interface DialogInitialState {
     gran: Gran;
@@ -124,10 +23,22 @@ export interface DialogInitialState {
     granMode?: "column"|"fixed";
     granOptions?: string[]; // distinct literal values from the physical granularity column
     granSelected?: string|null; // literal currently selected (column mode only)
+    showAutoGranToggle?: boolean;
+    applyImmediate?: boolean;
+    granAutoDefault?: boolean;
+    granVisible?: Record<Gran,boolean>;
+    granThresholds?: Record<Exclude<Gran,"D">,number>;
+    lockResizers?: boolean;
     colors?: {
-        bg: string; panel: string; accent: string;
+        bg: string; bgOpacity: number; panel: string; panelOpacity: number; accent: string;
         title: string; value: string; accentText: string;
         borderColor: string; borderWidth: number;
+        resizerColor: string; resizerThickness: number;
+        // pt values; see the three font pairs in the "Cores e Texto" card
+        fontFamilyGran: string; fontSizeGran: number;
+        fontFamilyShortcuts: string; fontSizeShortcuts: number;
+        fontFamilyContent: string; fontSizeContent: number;
+        fontFamilySide: string; fontSizeSide: number;
     };
 }
 export interface DialogResultState {
@@ -137,6 +48,8 @@ export interface DialogResultState {
     activeSC?:  string|null;
     dynN?:      number;
     granSelected?: string|null;
+    granAuto?: boolean;
+    manualGran?: string|null;
 }
 
 export const DIALOG_ID = "qahsDatePicker2Dialog";
@@ -161,6 +74,15 @@ export class DatePickerDialog {
     private granMode: "column"|"fixed" = "fixed";
     private granOptions: string[] = [];
     private granSelected: string|null = null;
+    private showAutoGranToggle = true;
+    private applyImmediate = false;
+    private granAuto = true;
+    private manualGranOverride: Gran|null = null;
+    private granVisibleMap: Record<Gran,boolean> = {D:true,W:true,M:true,Q:true,S:true,Y:true};
+    private granThresholdsMap: Record<Exclude<Gran,"D">,number> = {W:2,M:2,Q:2,S:2,Y:2};
+    private autoGranRow!: HTMLElement;
+    private manualGranSelect!: HTMLSelectElement;
+    private effectiveGranLbl!: HTMLElement;
 
     private shortcutsEl!: HTMLElement;
     private calAreaEl!:   HTMLElement;
@@ -178,6 +100,22 @@ export class DatePickerDialog {
     private dynInput!:    HTMLInputElement;
     private dynUnit!:     HTMLElement;
 
+    // Same drag-to-resize handles as the inline modes. Popup-only quirk: each open is a
+    // fresh dialog instance, so a chosen size only lasts for that one open — it does not
+    // round-trip through the visual (openModalDialog's initial/result state doesn't carry it).
+    private paneSizes: Record<string, number> = {};
+    private resizersLocked = false;
+    private weekdayResizeObserver: ResizeObserver|null = null;
+    private autoGranResizeObserver: ResizeObserver|null = null;
+    private addResizer(axis:"row"|"col", target:HTMLElement, sign:1|-1, key:string, min:number, max?:number, defaultPx?:number, revealScale?:number, revealPx?:number, alwaysFree?:boolean):HTMLElement{
+        return attachResizer({
+            axis, target, sign, min, max, defaultPx, revealScale, revealPx,
+            locked: alwaysFree ? false : this.resizersLocked,
+            initialPx: this.paneSizes[key],
+            onResize:(px)=>{ if(px<0) delete this.paneSizes[key]; else this.paneSizes[key]=px; }
+        });
+    }
+
     constructor(options: DialogConstructorOptions, initialState: object) {
         this.host = options.host;
         const state = initialState as DialogInitialState;
@@ -191,6 +129,12 @@ export class DatePickerDialog {
         this.granMode=state.granMode||"fixed";
         this.granOptions=state.granOptions||[];
         this.granSelected=state.granSelected||null;
+        this.showAutoGranToggle=state.showAutoGranToggle??true;
+        this.applyImmediate=state.applyImmediate??false;
+        this.granAuto=state.granAutoDefault??true;
+        if(state.granVisible) this.granVisibleMap=state.granVisible;
+        if(state.granThresholds) this.granThresholdsMap=state.granThresholds;
+        this.resizersLocked=state.lockResizers??false;
         if (state.refDate) { const d=new Date(state.refDate); if(!isNaN(d.getTime())) this.refDate=d; }
         if (state.rangeStart) { const d=new Date(state.rangeStart); if(!isNaN(d.getTime())) this.rangeS=d; }
         if (state.rangeEnd)   { const d=new Date(state.rangeEnd);   if(!isNaN(d.getTime())) this.rangeE=d; }
@@ -199,18 +143,30 @@ export class DatePickerDialog {
         this.build(options.element);
         if (state.colors) {
             const s = options.element.style;
-            s.setProperty("--dp-bg",           state.colors.bg);
-            s.setProperty("--dp-panel",        state.colors.panel);
+            s.setProperty("--dp-bg",           `color-mix(in srgb, ${state.colors.bg} ${100-Math.max(0,Math.min(100,state.colors.bgOpacity??0))}%, transparent)`);
+            s.setProperty("--dp-panel",        `color-mix(in srgb, ${state.colors.panel} ${100-Math.max(0,Math.min(100,state.colors.panelOpacity??0))}%, transparent)`);
             s.setProperty("--dp-accent",       state.colors.accent);
             s.setProperty("--dp-title",        state.colors.title);
             s.setProperty("--dp-value",        state.colors.value);
             s.setProperty("--dp-accent-text",  state.colors.accentText);
             s.setProperty("--dp-border",       state.colors.borderColor);
             s.setProperty("--dp-border-width", `${state.colors.borderWidth}px`);
+            s.setProperty("--dp-resizer-color",     state.colors.resizerColor);
+            s.setProperty("--dp-resizer-thickness", `${state.colors.resizerThickness||1}px`);
+            // Three independent zones, each with a real font-family and font-size — no
+            // more global zoom. pt→px: 1pt = 4/3px, the standard CSS conversion factor.
+            s.setProperty("--dp-font-family-gran",      state.colors.fontFamilyGran);
+            s.setProperty("--dp-font-size-gran",        `${(state.colors.fontSizeGran||7)*4/3}px`);
+            s.setProperty("--dp-font-family-shortcuts", state.colors.fontFamilyShortcuts);
+            s.setProperty("--dp-font-size-shortcuts",   `${(state.colors.fontSizeShortcuts||9)*4/3}px`);
+            s.setProperty("--dp-font-family-content",   state.colors.fontFamilyContent);
+            s.setProperty("--dp-font-size-content",     `${(state.colors.fontSizeContent||9)*4/3}px`);
+            s.setProperty("--dp-font-family-side",      state.colors.fontFamilySide);
+            s.setProperty("--dp-font-size-side",        `${(state.colors.fontSizeSide||9)*4/3}px`);
         }
     }
 
-    private t(){return I18N_SC[this.lang];}
+    private t(){return I18N[this.lang];}
     private e(tag:string,cls?:string):HTMLElement{const el=document.createElement(tag);if(cls)el.className=cls;return el;}
 
     private build(root: HTMLElement){
@@ -218,7 +174,10 @@ export class DatePickerDialog {
         root.className="dp-dlg";
 
         const granBar=this.buildGranBar();
-        if(granBar) root.append(granBar);
+        if(granBar){
+            root.append(granBar);
+            root.append(this.addResizer("row",granBar,1,"pGranBar",10,110));
+        }
 
         const body=this.e("div","dp-dlg-body");
         this.shortcutsEl=this.e("div","dp-dlg-shortcuts");
@@ -242,10 +201,74 @@ export class DatePickerDialog {
         this.inputWrapEnd = we;
 
         di.append(ws,we);
+        // Start/End is now a full-width strip of its own — a root-level sibling of `body`,
+        // not nested inside the calendar column — see visual.ts's identical change for why.
+        root.append(di, this.addResizer("row",di,1,"pDateInputs",0,80,46,undefined,46));
 
         this.calAreaEl=this.e("div","dp-dlg-cal-area");
-        cal.append(di,this.calAreaEl);
-        body.append(this.shortcutsEl,cal);
+        cal.append(this.calAreaEl);
+        body.append(this.shortcutsEl, this.addResizer("col",this.shortcutsEl,1,"pShortcuts",0,320,undefined,0.85,undefined,true), cal);
+
+        if(this.showAutoGranToggle){
+            const t=this.t();
+            this.autoGranRow=this.e("div","dp-dlg-autogran-row");
+
+            const toggleWrap=this.e("div","dp-dlg-autogran-toggle");
+            const btnAuto=this.e("button","dp-dlg-autogran-btn") as HTMLButtonElement;
+            const btnManual=this.e("button","dp-dlg-autogran-btn") as HTMLButtonElement;
+            btnAuto.textContent=t.autoLabelShort;
+            btnManual.textContent=t.manualLabelShort;
+            btnAuto.title=t.autoLabel; btnManual.title=t.manualLabel;
+            const refreshToggleBtns=()=>{
+                btnAuto.classList.toggle("active",this.granAuto);
+                btnManual.classList.toggle("active",!this.granAuto);
+            };
+            btnAuto.addEventListener("click",()=>{ if(!this.granAuto){ this.granAuto=true; refreshToggleBtns(); this.updateGranPreview(); } });
+            btnManual.addEventListener("click",()=>{
+                if(this.granAuto){
+                    this.granAuto=false;
+                    this.manualGranOverride=this.gran; // always = whatever's selected at top at this exact moment
+                    this.manualGranSelect.value=this.gran;
+                    refreshToggleBtns(); this.updateGranPreview();
+                }
+            });
+            toggleWrap.append(btnAuto,btnManual);
+
+            const infoIcon=this.e("span","dp-dlg-autogran-info");
+            infoIcon.textContent="ⓘ";
+            infoIcon.title=t.autoTooltip;
+
+            this.manualGranSelect=document.createElement("select");
+            this.manualGranSelect.className="dp-dlg-autogran-select";
+            (["Y","S","Q","M","W","D"] as Gran[]).filter(g=>this.granVisibleMap[g]).forEach(g=>{
+                const o=document.createElement("option");
+                o.value=g; o.textContent=t.granLabels[g];
+                this.manualGranSelect.append(o);
+            });
+            this.manualGranSelect.addEventListener("change",()=>{
+                this.manualGranOverride=this.manualGranSelect.value as Gran;
+                this.updateGranPreview();
+                // A native dialog can only ever communicate a change back to the visual by
+                // closing (setResult + close) — there's no "apply and stay open" API available
+                // here. So in Immediate mode, changing the dropdown submits right away instead
+                // of silently updating a value nothing will read until some other action (like
+                // re-picking a date) happens to close the dialog too.
+                if(this.applyImmediate) this.submit(true);
+            });
+
+            this.effectiveGranLbl=this.e("span","dp-dlg-autogran-effective");
+
+            this.autoGranRow.append(toggleWrap,infoIcon,this.manualGranSelect,this.effectiveGranLbl);
+            refreshToggleBtns();
+            this.manualGranSelect.value=this.manualGranOverride??this.gran;
+            this.updateGranPreview();
+            // Same reasoning as visual.ts's autoGranResizeObserver: updateGranPreview() only
+            // re-measures on explicit state changes (toggle click, dropdown change), not on
+            // a plain resize (dragging a neighbouring zone shrinks this row too).
+            this.autoGranResizeObserver?.disconnect();
+            this.autoGranResizeObserver=new ResizeObserver(()=>this.updateGranPreview());
+            this.autoGranResizeObserver.observe(this.autoGranRow);
+        }
 
         const footer=this.e("div","dp-dlg-footer");
         this.footerInfo=this.e("span","dp-dlg-info");
@@ -259,7 +282,13 @@ export class DatePickerDialog {
         footerBtns.append(btnCancel,btnApply);
         footer.append(this.footerInfo,footerBtns);
 
-        root.append(body,footer);
+        root.append(body);
+        if(this.showAutoGranToggle){
+            root.append(this.addResizer("row",this.autoGranRow,-1,"pAutoRow",0,140));
+            root.append(this.autoGranRow);
+        }
+        root.append(this.addResizer("row",footer,-1,"pFooter",18,200));
+        root.append(footer);
 
         this.buildCalArea(); this.buildShortcuts(); this.syncInputs(); this.updateInfo();
     }
@@ -298,10 +327,16 @@ export class DatePickerDialog {
         this.buildCalArea();
         this.buildShortcuts();
         this.refreshGranBar();
+        this.updateGranPreview();
     }
 
     private buildShortcuts(){
         this.shortcutsEl.replaceChildren();
+        this.shortcutsEl.classList.remove("dp-empty-collapsed");
+        if(this.scVisible["scShowAll"]===false){
+            this.shortcutsEl.classList.add("dp-empty-collapsed");
+            return;
+        }
         const t=this.t();
         let prev=false;
         let firstDivider=true;
@@ -321,12 +356,15 @@ export class DatePickerDialog {
             this.shortcutsEl.append(el); prev=true;
         });
         const dynVisible=this.scVisible["scDynamic"]!==false;
-        if(!dynVisible) return;
-        if(prev)this.shortcutsEl.append(this.e("div","dp-dlg-div"));
-        const dyn=this.e("div","dp-dlg-dyn");
+        if(!dynVisible){
+            this.shortcutsEl.classList.toggle("dp-empty-collapsed", this.shortcutsEl.children.length===0);
+            return;
+        }
+        const dyn=this.e("div","dp-dlg-sc dp-dlg-dyn");
         if(this.activeSC==="dynamic")dyn.classList.add("active");
-        const dl=this.e("div","dp-dlg-dynlbl"); dl.textContent=t.lastN;
-        const row=this.e("div","dp-dlg-dynrow");
+        dyn.style.cursor="pointer";
+        dyn.addEventListener("click",(ev)=>{if((ev.target as HTMLElement)!==this.dynInput) recalc();});
+        const dl=this.e("span","dp-dlg-dynlbl"); dl.textContent=t.lastN;
         const numBox=this.e("div","dp-dlg-dynbox");
         this.dynInput=document.createElement("input");
         this.dynInput.className="dp-dlg-dynin"; this.dynInput.type="number";
@@ -343,14 +381,10 @@ export class DatePickerDialog {
             this.shortcutsEl.querySelectorAll(".dp-dlg-sc").forEach(el=>el.classList.remove("active"));
             dyn.classList.add("active");
         };
-        // Make label, unit and the row itself clickable (activates the dynamic shortcut)
-        dl.style.cursor="pointer"; dl.addEventListener("click",()=>recalc());
-        this.dynUnit=this.e("span","dp-dlg-dynunit"); this.dynUnit.textContent=t.granLabels[this.gran];
-        this.dynUnit.style.cursor="pointer"; this.dynUnit.addEventListener("click",()=>recalc());
-        row.style.cursor="pointer";
-        row.addEventListener("click",(ev)=>{ if((ev.target as HTMLElement)!==this.dynInput) recalc(); });
+        this.dynUnit=this.e("span","dp-dlg-dynunit"); this.dynUnit.textContent=this.gran;
         this.dynInput.addEventListener("input",recalc);
         this.dynInput.addEventListener("change",recalc);
+        this.dynInput.addEventListener("click",(ev)=>ev.stopPropagation());
         this.dynInput.addEventListener("wheel",(ev)=>{
             ev.preventDefault();
             const cur=Math.max(1,+this.dynInput.value||1);
@@ -358,8 +392,7 @@ export class DatePickerDialog {
             recalc();
         }, {passive:false});
         numBox.append(this.dynInput);
-        row.append(numBox,this.dynUnit);
-        dyn.append(dl,row); this.shortcutsEl.append(dyn);
+        dyn.append(dl,numBox,this.dynUnit); this.shortcutsEl.append(dyn);
     }
 
     private doSC(id:string){
@@ -435,6 +468,12 @@ export class DatePickerDialog {
 
     private buildCalArea(){
         this.calAreaEl.replaceChildren();
+        // Same reasoning as visual.ts's buildCalArea: lets the header (.dp-dlg-yrlabel /
+        // .dp-dlg-my select) track whichever adaptive font-size reduction the grid cells
+        // use for this granularity.
+        this.calAreaEl.className="dp-dlg-cal-area dp-dlg-cal-area-"+this.gran.toLowerCase();
+        this.weekdayResizeObserver?.disconnect();
+        this.weekdayResizeObserver=null;
         const isDayGrid=this.gran==="D";
         const isSingleYear=this.gran==="M"||this.gran==="W";
         this.calY=this.clampCalY(this.calY);
@@ -482,8 +521,24 @@ export class DatePickerDialog {
             grid.append(this.calDaysEl);
         }
         this.calAreaEl.append(ch,grid);
+        if(isDayGrid){
+            this.fitWeekdayHeaderToWidth(grid);
+            this.weekdayResizeObserver=new ResizeObserver(()=>this.fitWeekdayHeaderToWidth(grid));
+            this.weekdayResizeObserver.observe(grid);
+        }
         this.syncSel();
         this.renderCalendarBody();
+    }
+    // Re-checked on every resize (dragging a neighbouring zone changes this grid's width
+    // too), not just once at build time — see visual.ts's identical method for why.
+    private static readonly MIN_PX_PER_WEEKDAY_COL=29;
+    private fitWeekdayHeaderToWidth(gridEl:HTMLElement):void{
+        if(this.gran!=="D") return;
+        const t=this.t();
+        const cells=gridEl.querySelectorAll<HTMLElement>(".dp-dlg-wd:not(.dp-dlg-wn-header)");
+        if(cells.length===0) return;
+        const useShort=gridEl.clientWidth>0 && gridEl.clientWidth<DatePickerDialog.MIN_PX_PER_WEEKDAY_COL*7.65;
+        cells.forEach((c,i)=>{ c.textContent=(useShort?t.wdaysShort[i]:t.wdays[i])??t.wdays[i]; });
     }
 
     private navCal(d:number){
@@ -746,16 +801,38 @@ export class DatePickerDialog {
         this.lastSyncedE = this.inE.value;
     }
 
+    private updateGranPreview(){
+        if(!this.showAutoGranToggle || !this.effectiveGranLbl) return;
+        const t=this.t();
+        this.manualGranSelect.style.display=this.granAuto?"none":"";
+        let effective:Gran;
+        if(this.granAuto){
+            effective=(this.rangeS&&this.rangeE)
+                ? resolveEffectiveGran(this.gran,this.rangeS,this.rangeE,this.granVisibleMap,this.granThresholdsMap)
+                : this.gran;
+        } else {
+            effective=this.manualGranOverride??this.gran;
+        }
+        // Always the single letter — see visual.ts's identical simplification.
+        this.effectiveGranLbl.textContent=`${t.effectiveLabel}: ${effective}`;
+    }
+
     private updateInfo(){
         const t=this.t();
+        this.footerInfo.replaceChildren();
         if(this.picking){
-            this.footerInfo.textContent=`${fmt(this.rangeS!)} ${t.clickEnd}`;
+            const s=document.createElement("span"); s.textContent=`${fmt(this.rangeS!)} ${t.clickEnd}`;
+            this.footerInfo.append(s);
         }else if(this.rangeS&&this.rangeE){
+            // Same reasoning as visual.ts's identical fix: separate spans so a too-narrow
+            // dialog can only ever wrap BETWEEN start/end/day-count, never mid-date.
             const diff=Math.round((dMs(this.rangeE)-dMs(this.rangeS))/86400000)+1;
-            this.footerInfo.textContent=`${fmt(this.rangeS)} → ${fmt(this.rangeE)} (${diff} ${t.days})`;
-        }else{
-            this.footerInfo.textContent="";
+            const startSpan=document.createElement("span"); startSpan.textContent=fmt(this.rangeS);
+            const endSpan=document.createElement("span"); endSpan.textContent=`→ ${fmt(this.rangeE)}`;
+            const daysSpan=document.createElement("span"); daysSpan.textContent=`(${diff} ${t.days})`;
+            this.footerInfo.append(startSpan,endSpan,daysSpan);
         }
+        this.updateGranPreview();
     }
 
     private submit(apply: boolean): void {
@@ -767,7 +844,9 @@ export class DatePickerDialog {
                 cancelled:  false,
                 activeSC:   this.activeSC,
                 dynN:       this.dynN,
-                granSelected: this.granMode==="column" ? this.granSelected : undefined
+                granSelected: this.granMode==="column" ? this.granSelected : undefined,
+                granAuto:   this.showAutoGranToggle ? this.granAuto : undefined,
+                manualGran: this.showAutoGranToggle && !this.granAuto ? (this.manualGranOverride??this.gran) : undefined
             };
             this.host.setResult(result);
             this.host.close(1 as any);

@@ -9,15 +9,22 @@
     --dp-border-width: 1px;
 }
 
+.dp-thin-scrollbar() {
+    &::-webkit-scrollbar { width: 3px; height: 3px; }
+    &::-webkit-scrollbar-thumb { background: var(--dp-border); border-radius: 2px; }
+}
+
 * { box-sizing: border-box; }
 
-.qahs-dp-root, .dp-popup-root {
+.qahs-dp-root {
     margin: 0; padding: 0;
 }
 
 .qahs-dp-root {
     width: 100%; height: 100%;
-    font-family: "Segoe UI", sans-serif; font-size: 12px;
+    // Generic fallback only — every zone (gran bar / shortcuts+calendar / control panel)
+    // sets its own font-family/size on its own container further down, overriding this.
+    font-family: var(--dp-font-family-content, "Segoe UI", sans-serif); font-size: 12px;
     display: flex; flex-direction: column;
     -webkit-font-smoothing: antialiased;
 }
@@ -32,17 +39,18 @@
     border: var(--dp-border-width) solid var(--dp-border);
     width: 100%; height: 100%;
     transition: border-color 0.15s, filter 0.15s;
+    font-family: var(--dp-font-family-content, "Segoe UI", sans-serif);
     &:hover { filter: brightness(1.12); border-color: var(--dp-accent); }
 
     .dp-closed-icon { font-size: 15px; opacity: 0.85; flex-shrink: 0; }
     .dp-closed-text {
         flex: 1; overflow: hidden;
         .dp-closed-gran {
-            font-size: 9.5px; color: var(--dp-title);
+            font-size: calc(var(--dp-font-size-content, 12px) - 2.5px); color: var(--dp-title);
             text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 2px; font-weight: 600;
         }
-        .dp-closed-range { font-size: 13px; color: var(--dp-value); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .dp-closed-hint  { font-size: 11.5px; color: var(--dp-title); font-style: italic; }
+        .dp-closed-range { font-size: var(--dp-font-size-content, 13px); color: var(--dp-value); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dp-closed-hint  { font-size: calc(var(--dp-font-size-content, 12px) - 0.5px); color: var(--dp-title); font-style: italic; }
     }
     .dp-closed-refresh {
         color: var(--dp-title); flex-shrink: 0;
@@ -63,39 +71,53 @@
 /* ════════════════════════════════════════════════════════════════════════
    POPUP — attached to document.body
    ════════════════════════════════════════════════════════════════════════ */
-.dp-overlay {
-    position: fixed; inset: 0;
-    z-index: 2147483646;
-    background: transparent;
-}
+.dp-pop-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
 
-.dp-popup-root {
-    position: fixed;
-    width: 540px; height: 400px;
-    background: var(--dp-bg); color: var(--dp-value);
-    border: var(--dp-border-width) solid var(--dp-border);
-    border-radius: 10px;
-    box-shadow: 0 16px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
-    font-family: "Segoe UI", sans-serif; font-size: 12px;
-    display: flex; flex-direction: column;
-    overflow: hidden;
-    z-index: 2147483647;
-}
-
-.dp-pop-hdr {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 16px; background: var(--dp-panel);
-    border-bottom: var(--dp-border-width) solid var(--dp-border); flex-shrink: 0;
-    .dp-pop-title { font-size: 13px; font-weight: 700; color: var(--dp-value); letter-spacing: 0.2px; }
-    .dp-pop-close {
-        cursor: pointer; color: var(--dp-title); font-size: 15px;
-        width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
-        border-radius: 50%; line-height: 1; transition: all 0.15s;
-        &:hover { background: rgba(255,255,255,0.1); color: var(--dp-value); }
+/* Paired with resize.ts's applySize(): at a literal 0 target size, zero out padding/border
+   too — otherwise fixed-px padding can't shrink below its own size and leaves a sliver of
+   background (and any text fragment that still fits in it) even at flex-basis:0. */
+.dp-resize-zeroed { padding: 0 !important; border-width: 0 !important; overflow: hidden !important; }
+.dp-resizer {
+    flex: 0 0 auto; position: relative; z-index: 2;
+    // Color and thickness are both configurable now (see the "Separadores" section of
+    // the "Cores e Texto" card) — the default border color isn't always visible enough
+    // for a viewer to notice these are draggable at all.
+    &::after {
+        content: ""; position: absolute;
+        background: var(--dp-resizer-color, var(--dp-border));
+        transition: background 0.1s, opacity 0.1s; opacity: 0.8;
+    }
+    &:hover::after, &.dragging::after { background: var(--dp-accent); opacity: 1; }
+    // Locked (see "Bloquear tamanhos" in Modo de Exibição): the divider still occupies
+    // its usual space so the layout doesn't shift, but reads as inert rather than
+    // interactive — no hover/drag color change, no resize cursor.
+    &.dp-resizer-locked {
+        cursor: default;
+        &::after { opacity: 0.35; }
+        &:hover::after { background: var(--dp-resizer-color, var(--dp-border)); opacity: 0.35; }
     }
 }
+.dp-resizer-row {
+    width: 100%; height: 7px; cursor: row-resize; touch-action: none;
+    &::after {
+        left: 0; right: 0;
+        height: var(--dp-resizer-thickness, 1px);
+        top: calc(3.5px - (var(--dp-resizer-thickness, 1px) / 2));
+    }
+    &:hover::after, &.dragging::after { height: calc(var(--dp-resizer-thickness, 1px) + 1px); top: calc(3px - (var(--dp-resizer-thickness, 1px) / 2)); }
+}
+.dp-resizer-col {
+    height: 100%; width: 7px; cursor: col-resize; touch-action: none; flex-shrink: 0;
+    &::after {
+        top: 0; bottom: 0;
+        width: var(--dp-resizer-thickness, 1px);
+        left: calc(3.5px - (var(--dp-resizer-thickness, 1px) / 2));
+    }
+    &:hover::after, &.dragging::after { width: calc(var(--dp-resizer-thickness, 1px) + 1px); left: calc(3px - (var(--dp-resizer-thickness, 1px) / 2)); }
+}
 
-.dp-pop-body { display: flex; flex: 1; overflow: hidden; }
+/* ── FINAL ZONE (vertical/inline mode): auto-gran row and footer each resize
+   independently now (see buildCalendarUI) — no shared wrapper needed. ── */
 
 /* ── GRANULARITY BAR: the first thing you pick, always pinned to the top ── */
 .dp-gran-bar {
@@ -103,8 +125,9 @@
     background: var(--dp-panel); border-bottom: var(--dp-border-width) solid var(--dp-border);
 }
 .dp-gran-btn {
-    flex: 1; padding: 5px 0; border-radius: 5px; font-size: 11px; font-weight: 700;
-    font-family: "Segoe UI",sans-serif; cursor: pointer; text-align: center;
+    flex: 1; padding: 5px 0; border-radius: 5px; font-size: var(--dp-font-size-gran, 11px); font-weight: 700;
+    font-family: var(--dp-font-family-gran, "Segoe UI", sans-serif); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; text-align: center;
     background: transparent; color: var(--dp-title); border: 1.5px solid var(--dp-border);
     transition: all 0.12s;
     &:hover { background: rgba(255,255,255,0.06); color: var(--dp-value); }
@@ -113,20 +136,48 @@
         box-shadow: 0 2px 6px color-mix(in srgb, var(--dp-accent) 40%, transparent);
     }
 }
-.dp-horiz-root > .dp-gran-bar { padding: 6px 10px; }
-.dp-horiz-root > .dp-gran-bar .dp-gran-btn { padding: 4px 0; font-size: 10.5px; }
+.dp-gran-bar-vertical {
+    display: flex; flex-direction: column; align-items: stretch;
+    width: 26px; flex-shrink: 0; padding: 1px; gap: 1px;
+    border-bottom: none; border-right: var(--dp-border-width) solid var(--dp-border);
+    overflow-y: auto; .dp-thin-scrollbar();
+    // No writing-mode override (horizontal-tb is the default anyway) and an explicit
+    // flex-centered button — relying on native <button> centering plus a leftover
+    // writing-mode declaration was clipping the glyph off-center in the real Chromium
+    // render at this width, even though it looked fine in isolated testing.
+    .dp-gran-btn {
+        padding: 1px; border: none;
+        // The active fill used to be the whole button box — wide but very short here,
+        // since 6 of them must stack in a narrow column — which read as a thin line
+        // rather than a highlight. A small fixed-size square badge behind just the
+        // letter stays proportional no matter how flattened the button itself gets.
+        // No border on the button itself either — the badge alone is enough to show
+        // which one is selected, and a border around every flattened button just adds
+        // more thin-line shapes competing for attention.
+        &.active { background: transparent; box-shadow: none; }
+        &:hover { background: transparent; }
+        .dp-gran-badge {
+            display: flex; align-items: center; justify-content: center;
+            width: 23px; height: 23px; border-radius: 5px; transition: background 0.12s;
+        }
+        &.active .dp-gran-badge { background: var(--dp-accent); color: var(--dp-accent-text); }
+        &:hover:not(.active) .dp-gran-badge { background: rgba(255,255,255,0.08); }
+    }
+}
 
 /* ── LEFT PANEL: shortcuts — reduced visual weight, more breathing room ── */
 .dp-pop-shortcuts {
     width: 116px; flex-shrink: 0;
     border-right: var(--dp-border-width) solid var(--dp-border);
-    overflow-y: auto; padding: 10px 0;
+    overflow-y: auto; overflow-x: hidden; padding: 10px 0;
     background: color-mix(in srgb, var(--dp-panel) 35%, transparent);
     &::-webkit-scrollbar { width: 3px; }
     &::-webkit-scrollbar-thumb { background: var(--dp-border); border-radius: 2px; }
+    &.dp-empty-collapsed { width: 0; padding: 0; border-right: none; overflow: hidden; }
 }
 .dp-pop-sc {
-    padding: 8px 14px; cursor: pointer; font-size: 11px; color: var(--dp-title);
+    padding: 8px 10px; cursor: pointer; font-size: var(--dp-font-size-shortcuts, 11px); color: var(--dp-title);
+    font-family: var(--dp-font-family-shortcuts, "Segoe UI", sans-serif);
     font-weight: 400; transition: all 0.12s; opacity: 0.85;
     border-left: 2px solid transparent;
     &:hover { background: rgba(255,255,255,0.05); color: var(--dp-value); opacity: 1; }
@@ -137,23 +188,27 @@
     }
 }
 .dp-pop-div { height: 1px; background: var(--dp-border); margin: 8px 14px; opacity: 0.6; }
+/* Shares .dp-pop-sc's padding/font/hover/active look (added as a second class in the
+   markup) so it reads as one more line in the same list, not a visually distinct widget —
+   this just adds the bits specific to having an editable number inline. */
 .dp-pop-dyn {
-    padding: 10px 14px 12px; cursor: default;
-    .dp-pop-dynlbl { font-size: 10px; color: var(--dp-title); margin-bottom: 6px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.4px; }
-    &.active .dp-pop-dynlbl { color: var(--dp-value); opacity: 1; font-weight: 600; }
-    .dp-pop-dynrow {
-        display: flex; align-items: center; gap: 7px;
-    }
+    display: flex; align-items: center; gap: 4px;
+    .dp-pop-dynlbl { white-space: nowrap; }
     .dp-pop-dynbox {
         flex-shrink: 0;
         background: var(--dp-panel); border: var(--dp-border-width) solid var(--dp-border);
-        border-radius: 5px; padding: 3px 6px; transition: border-color 0.15s;
+        border-radius: 4px; padding: 0 3px; transition: border-color 0.15s;
         &:focus-within { border-color: var(--dp-accent); }
     }
     .dp-pop-dynin {
         width: 28px; background: transparent; border: none;
-        color: var(--dp-value); font-size: 12px; font-weight: 600; padding: 2px 0;
-        font-family: "Segoe UI",sans-serif; text-align: center;
+        // Form controls don't inherit color/font-weight/font-size from surrounding text by
+        // default (unlike normal inline elements) — without these explicit `inherit`s the
+        // number always rendered at the bright "value" color and bold weight regardless of
+        // whether this row was the active shortcut, reading as a mismatched, foreign-looking
+        // element sitting in a list of otherwise plain, dimmer, same-weight text.
+        color: inherit; font-size: inherit; font-weight: inherit; padding: 0;
+        font-family: inherit; text-align: center;
         &:focus { outline: none; }
         &::-webkit-inner-spin-button, &::-webkit-outer-spin-button {
             opacity: 0; transition: opacity 0.15s;
@@ -165,27 +220,30 @@
         }
     }
     .dp-pop-dynunit {
-        font-size: 10.5px; color: var(--dp-title); flex: 1;
+        color: inherit; flex: 1;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 }
 
 /* ── RIGHT PANEL: calendar ── */
 .dp-pop-cal {
-    flex: 1; display: flex; flex-direction: column;
-    padding: 14px 16px 10px; gap: 10px; overflow: hidden;
+    flex: 1; display: flex; flex-direction: column; min-width: 0;
+    padding: 0 10px 0; gap: 0; overflow: hidden;
 }
 
 /* Step-aware date inputs — base rule, reused by vertical .dp-pop-inputs AND horizontal .dp-horiz-dates */
 .dp-pop-iw {
-    flex: 1; display: flex; flex-direction: column; gap: 2px;
-    padding: 4px 8px; border-radius: 5px;
+    flex: 1; display: flex; flex-direction: column; gap: 1px;
+    padding: 3px 8px; border-radius: 5px;
     border: 1.5px solid transparent;
     background: color-mix(in srgb, var(--dp-panel) 60%, transparent);
     transition: all 0.18s;
+    font-family: var(--dp-font-family-side, "Segoe UI", sans-serif);
 
     label {
-        font-size: 9px; color: var(--dp-title); text-transform: uppercase;
+        // Same font-size as the date value below — was 9px vs 12px, visibly two different
+        // sizes in what's meant to read as one small "field" (label + value together).
+        font-size: var(--dp-font-size-side, 11px); color: var(--dp-title); text-transform: uppercase;
         letter-spacing: 0.5px; font-weight: 600; opacity: 0.7;
         display: flex; align-items: center; gap: 4px;
         &::before {
@@ -195,8 +253,8 @@
     }
     input {
         background: transparent; border: none;
-        color: var(--dp-value); font-size: 12px; font-weight: 600;
-        padding: 0; font-family: "Segoe UI",sans-serif; width: 100%;
+        color: var(--dp-value); font-size: var(--dp-font-size-side, 11px); font-weight: 600;
+        padding: 0; font-family: inherit; width: 100%;
         &:focus { outline: none; }
         &::placeholder { color: var(--dp-title); opacity: 0.5; font-weight: 400; }
         &.err { color: #ff8a80; }
@@ -213,7 +271,12 @@
 }
 
 .dp-pop-inputs {
-    display: flex; gap: 8px; flex-shrink: 0;
+    display: flex; gap: 8px; flex-shrink: 0; overflow: hidden;
+    // Own horizontal padding now — this used to come from .dp-pop-cal's padding when
+    // nested inside it, but it's a root-level, full-width strip of its own now (so
+    // resizing the shortcuts↔calendar divider — a WIDTH-only change — can no longer
+    // squeeze this row's HEIGHT as a side effect of squeezing the calendar column).
+    padding: 4px 10px;
 }
 
 @keyframes dp-flash-anim {
@@ -222,7 +285,7 @@
 }
 .dp-flash { animation: dp-flash-anim 0.5s ease-out; border-radius: 4px; }
 
-.dp-cal-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.dp-cal-area { flex: 1; display: flex; flex-direction: column; min-height: 0; font-family: var(--dp-font-family-content, "Segoe UI", sans-serif); }
 
 .dp-pop-calh {
     display: flex; align-items: center; justify-content: center; gap: 10px; flex-shrink: 0;
@@ -230,7 +293,7 @@
         background: transparent; border: none;
         color: var(--dp-title); font-size: 16px; width: 26px; height: 26px;
         display: flex; align-items: center; justify-content: center;
-        border-radius: 50%; cursor: pointer; font-family: "Segoe UI",sans-serif;
+        border-radius: 50%; cursor: pointer; font-family: inherit;
         transition: all 0.15s;
         &:hover { background: color-mix(in srgb, var(--dp-accent) 18%, transparent); color: var(--dp-value); }
         &:active { transform: scale(0.92); }
@@ -239,8 +302,11 @@
         display: flex; gap: 4px; align-items: center;
         select {
             background: transparent; border: none;
-            color: var(--dp-value); font-size: 14px; font-weight: 700; padding: 3px 4px;
-            font-family: "Segoe UI",sans-serif; cursor: pointer; border-radius: 4px;
+            // Same var as .dp-period-cell/.dp-pop-yrlabel — this IS the header for D/M/W,
+            // the same way .dp-pop-yrlabel is the header for Q/S/Y (see the .dp-cal-area-X
+            // rules below for the per-granularity adaptive reduction both track together).
+            color: var(--dp-value); font-size: var(--dp-font-size-content, 12px); font-weight: 700; padding: 3px 4px;
+            font-family: inherit; cursor: pointer; border-radius: 4px;
             transition: background 0.15s;
             &:hover { background: rgba(255,255,255,0.06); }
             &:focus { outline: none; background: rgba(255,255,255,0.08); }
@@ -250,13 +316,13 @@
 }
 
 .dp-pop-grid {
-    flex: 1; display: flex; flex-direction: column; gap: 3px; overflow: hidden;
+    flex: 1; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; .dp-thin-scrollbar();
 }
 .dp-pop-wds {
-    display: grid; grid-template-columns: 0.65fr repeat(7,1fr);
+    display: grid; grid-template-columns: 0.65fr repeat(7,1fr); gap: 0 2px;
     padding-bottom: 2px;
-    .dp-pop-wd { text-align: center; font-size: 9.5px; color: var(--dp-title); padding: 2px 0; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.3px; }
-    .dp-pop-wn-header { opacity: 0.4; font-size: 8.5px; }
+    .dp-pop-wd { text-align: center; font-size: calc(var(--dp-font-size-content, 12px) - 2.5px); color: var(--dp-title); padding: 2px 0; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; }
+    .dp-pop-wn-header { opacity: 0.4; font-size: calc(var(--dp-font-size-content, 12px) - 3.5px); }
 }
 .dp-pop-days {
     flex: 1; display: grid; grid-template-columns: 0.65fr repeat(7,1fr);
@@ -264,7 +330,7 @@
 }
 .dp-pop-wn {
     display: flex; align-items: center; justify-content: center;
-    font-size: 9px; color: var(--dp-title); opacity: 0.45;
+    font-size: calc(var(--dp-font-size-content, 12px) - 3px); color: var(--dp-title); opacity: 0.45;
     border-right: 1px dashed var(--dp-border); margin-right: 3px;
     border-radius: 4px;
 }
@@ -277,7 +343,7 @@
 .dp-pop-day {
     position: relative;
     display: flex; align-items: center; justify-content: center;
-    font-size: 11.5px; color: var(--dp-title); cursor: pointer;
+    font-size: var(--dp-font-size-content, 11.5px); color: var(--dp-title); cursor: pointer;
     border-radius: 6px; transition: background 0.1s, color 0.1s; min-height: 24px;
     &:hover:not(.empty):not(.rs):not(.re) { background: rgba(255,255,255,0.08); color: var(--dp-value); }
     &.empty { pointer-events: none; }
@@ -317,7 +383,18 @@
     display: grid; gap: 4px; width: 100%; height: 100%; align-content: stretch;
 }
 .dp-period-gridwrap-m .dp-period-grid { grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(3,1fr); }
-.dp-period-gridwrap-w .dp-period-grid { grid-template-columns: repeat(9,1fr); grid-template-rows: repeat(6,1fr); }
+.dp-period-gridwrap-w .dp-period-grid {
+    // Fixed 9 columns used to clip weeks off the right edge in narrow layouts (with no
+    // scrollbar to reach them) — auto-fill lets the browser drop to fewer, wider columns
+    // (and more rows) as space shrinks, and the wrapper below scrolls vertically for
+    // whatever no longer fits, so every week stays reachable regardless of width.
+    grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+    grid-auto-rows: minmax(20px, 1fr);
+    grid-template-rows: none;
+}
+.dp-period-gridwrap-w {
+    overflow-y: auto; .dp-thin-scrollbar();
+}
 .dp-period-gridwrap-q .dp-period-grid { grid-template-columns: repeat(4,1fr); }
 .dp-period-gridwrap-s .dp-period-grid { grid-template-columns: repeat(6,1fr); }
 .dp-period-gridwrap-y .dp-period-grid { grid-template-columns: repeat(4,1fr); }
@@ -325,9 +402,10 @@
 .dp-period-cell {
     position: relative;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px; color: var(--dp-title); cursor: pointer; font-weight: 600;
+    font-size: var(--dp-font-size-content, 12px); color: var(--dp-title); cursor: pointer; font-weight: 600;
     border-radius: 6px; transition: background 0.1s, color 0.1s; min-height: 0;
     border: 1.5px solid var(--dp-border);
+    white-space: nowrap; overflow: hidden; text-overflow: clip; padding: 0 2px;
     &:hover:not(.rs):not(.re) { background: rgba(255,255,255,0.08); color: var(--dp-value); }
 
     &.today { color: var(--dp-accent); border-color: var(--dp-accent); }
@@ -350,31 +428,87 @@
     &.rs.re { border-radius: 6px; }
 }
 
-.dp-pop-yrlabel { font-weight: 700; font-size: 14px; color: var(--dp-value); letter-spacing: 0.2px; }
+.dp-pop-yrlabel { font-weight: 700; font-size: var(--dp-font-size-content, 12px); color: var(--dp-value); letter-spacing: 0.2px; }
 
-.dp-period-gridwrap-q .dp-period-cell { font-size: 10.5px; }
-.dp-period-gridwrap-s .dp-period-cell { font-size: 9.5px; }
-.dp-period-gridwrap-w .dp-period-cell { font-size: 9px; }
+// Adaptive per-granularity reduction — expressed relative to the shared content base so
+// the header (.dp-pop-yrlabel for Q/S/Y, .dp-pop-my select for D/M/W) and the grid cells
+// always shrink together, whatever the base size is currently set to.
+.dp-cal-area-q .dp-period-cell, .dp-cal-area-q .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-content, 12px) - 1.5px); }
+.dp-cal-area-s .dp-period-cell, .dp-cal-area-s .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-content, 12px) - 3.5px); }
+.dp-cal-area-w .dp-period-cell, .dp-cal-area-w .dp-pop-my select { font-size: calc(var(--dp-font-size-content, 12px) - 3px); }
+
+/* ── AUTO/MANUAL GRANULARITY ROW: shared by inline-vertical and inline-horizontal ── */
+.dp-autogran-row {
+    display: flex; align-items: center; gap: 8px;
+    // Left padding matches .dp-pop-sc's own left padding (10px) exactly, since this row
+    // is a root-level sibling of the shortcuts+calendar body — "Auto" is meant to line up
+    // with where the shortcut TEXT starts (the far left of the whole widget), not with
+    // the calendar column further right.
+    padding: 6px 14px 6px 10px; background: var(--dp-panel); overflow: hidden;
+    border-top: var(--dp-border-width) solid var(--dp-border); flex-shrink: 0;
+    font-family: var(--dp-font-family-side, "Segoe UI", sans-serif);
+
+    &.dp-autogran-vertical {
+        flex-direction: column; align-items: center; gap: 3px;
+        border-top: none; border-bottom: var(--dp-border-width) solid var(--dp-border);
+        padding: 4px 0; margin: 0;
+        .dp-autogran-effective { text-align: left; }
+        .dp-autogran-select { width: 90%; }
+        .dp-autogran-info-row { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; }
+    }
+
+    .dp-autogran-toggle { display: flex; gap: 3px; flex-shrink: 0; }
+    .dp-autogran-btn {
+        // Matches .dp-pop-btn (Cancel/Apply) exactly — same padding, font-size, radius —
+        // so the two button pairs read as the same kind of control, not two different ones.
+        padding: 5px 14px; border-radius: 5px; font-size: var(--dp-font-size-side, 11.5px); font-weight: 600;
+        font-family: inherit;
+        cursor: pointer; text-align: center;
+        background: transparent; color: var(--dp-title); border: 1.5px solid var(--dp-border);
+        transition: all 0.12s;
+        &:hover { background: rgba(255,255,255,0.06); color: var(--dp-value); }
+        &.active {
+            background: var(--dp-accent); color: var(--dp-accent-text); border-color: var(--dp-accent);
+        }
+    }
+    .dp-autogran-info {
+        font-size: var(--dp-font-size-side, 13px); color: var(--dp-title); cursor: help; flex-shrink: 0;
+        opacity: 0.75;
+        &:hover { opacity: 1; }
+    }
+    .dp-autogran-select {
+        font-size: var(--dp-font-size-side, 11px); font-family: inherit; padding: 3px 6px; border-radius: 4px;
+        background: var(--dp-bg); color: var(--dp-value); border: 1px solid var(--dp-border);
+        flex-shrink: 0;
+    }
+    .dp-autogran-effective {
+        font-size: var(--dp-font-size-side, 11px); color: var(--dp-title); opacity: 0.9; flex: 1; text-align: right;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    }
+}
 
 /* ── FOOTER: prominent range summary + primary action ── */
 .dp-pop-footer {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 8px 14px; background: var(--dp-panel);
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px;
+    padding: 5px 10px; background: var(--dp-panel);
     border-top: var(--dp-border-width) solid var(--dp-border); flex-shrink: 0;
+    font-family: var(--dp-font-family-side, "Segoe UI", sans-serif);
 
     .dp-pop-info {
-        font-size: 12.5px; font-weight: 600; color: var(--dp-value); flex: 1;
+        display: flex; flex-wrap: wrap; gap: 0 6px; min-width: 0;
+        font-size: var(--dp-font-size-side, 12.5px); font-weight: 600; color: var(--dp-value); flex: 1;
         letter-spacing: 0.1px; opacity: 0.95;
+        span { white-space: nowrap; }
     }
-    .dp-pop-footer-btns { display: flex; gap: 6px; align-items: center; }
+    .dp-pop-footer-btns { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 }
 
 /* Global — used by the popup footer, the inline (vertical) footer AND the
    horizontal mode's side-panel button row, so it must not be scoped to
    .dp-pop-footer alone. */
 .dp-pop-btn {
-    padding: 5px 14px; border-radius: 5px; font-size: 11.5px;
-    font-family: "Segoe UI",sans-serif; cursor: pointer; border: 1.5px solid transparent;
+    padding: 5px 14px; border-radius: 5px; font-size: var(--dp-font-size-side, 11.5px);
+    font-family: var(--dp-font-family-side, "Segoe UI", sans-serif); cursor: pointer; border: 1.5px solid transparent;
     transition: all 0.15s; font-weight: 600;
 
     &.cancel {
@@ -382,8 +516,12 @@
         &:hover { background: rgba(255,255,255,0.05); color: var(--dp-value); }
     }
     &.apply {
+        // No extra font-weight here anymore — Auto/Man.'s ".active" state doesn't get one
+        // either, and having Apply alone at 700 while everything else in both pairs sits
+        // at 600 was exactly the "don't look the same" mismatch reported. The background/
+        // shadow already make Apply read as the primary action without needing bolder text.
         background: var(--dp-accent); color: var(--dp-accent-text); border-color: var(--dp-accent);
-        font-weight: 700; box-shadow: 0 2px 8px color-mix(in srgb, var(--dp-accent) 40%, transparent);
+        box-shadow: 0 2px 8px color-mix(in srgb, var(--dp-accent) 40%, transparent);
         &:hover { filter: brightness(1.1); box-shadow: 0 3px 12px color-mix(in srgb, var(--dp-accent) 55%, transparent); }
         &:active { transform: translateY(1px); }
     }
@@ -397,13 +535,50 @@
     border: var(--dp-border-width) solid var(--dp-border);
     border-radius: 8px;
     overflow: hidden;
+
+    // This — not .dp-inline-root's own background — is what was still showing solid
+    // regardless of "Transparência da área expansível": wrap's background never reacted
+    // to hover at all, so it kept showing through underneath root's now-transparent one.
+    &.dp-hover-mode {
+        background: var(--dp-hover-reveal-bg, var(--dp-bg));
+        &.dp-hover-active { background: var(--dp-bg); }
+    }
+}
+
+.dp-hover-reveal {
+    display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0;
 }
 
 .dp-inline-root {
     width: 100%; height: 100%;
     display: flex; flex-direction: column;
-    background: var(--dp-bg); color: var(--dp-value);
+    // No background of its own — .dp-inline-mode (this.wrap, its parent) already
+    // provides one for the normal case, and this being unconditionally opaque here was
+    // masking .dp-inline-mode's hover-conditional background from underneath, recreating
+    // the exact "still looks solid" bug one layer further out.
+    color: var(--dp-value);
+
+    .dp-pop-iw {
+        align-items: center; text-align: center; padding: 2px 6px; gap: 0;
+        label { justify-content: center; width: 100%; }
+        input { text-align: center; }
+    }
+    .dp-pop-inputs { gap: 6px; }
+    .dp-gran-bar { padding: 2px 8px; }
+    .dp-gran-btn { padding: 2px 0; font-size: var(--dp-font-size-gran, 10px); border-width: 1px; }
 }
+
+// "Mostrar apenas ao passar o rato" — collapsed by default to just the granularity bar
+// and Início/Fim, the rest (shortcuts+calendar, Auto/Man., footer) only appears on
+// :hover. The hover/active classes live on .dp-inline-mode (this.wrap, the OUTER
+// element — see the identical rule there for why its own background needed this too),
+// so .dp-hover-reveal (nested a few levels down inside .dp-inline-root) has to react to
+// an ANCESTOR's class here, not its own. display:none rather than height:0/opacity —
+// this content shouldn't be interactive or take up layout space while hidden, and the
+// widget's own on-page size doesn't change either way, so there's nothing to animate a
+// transition between.
+.dp-inline-mode.dp-hover-mode .dp-hover-reveal { display: none; }
+.dp-inline-mode.dp-hover-mode.dp-hover-active .dp-hover-reveal { display: flex; }
 
 /* ════════════════════════════════════════════════════════════════════════
    HORIZONTAL MODE — 4 columns: shortcuts | dates | calendar | info
@@ -420,7 +595,7 @@
     width: 100%; height: 100%;
     display: flex; flex-direction: column;
     background: var(--dp-bg); color: var(--dp-value);
-    font-family: "Segoe UI", sans-serif; font-size: 12px;
+    font-family: var(--dp-font-family-content, "Segoe UI", sans-serif); font-size: 12px;
 }
 .dp-horiz-row {
     display: flex; flex-direction: row; flex: 1; min-height: 0;
@@ -430,22 +605,21 @@
 .dp-horiz-shortcuts {
     width: 124px; flex-shrink: 0;
     border-right: var(--dp-border-width) solid var(--dp-border);
-    overflow-y: auto; padding: 4px 0;
+    overflow-y: auto; overflow-x: hidden; padding: 4px 0;
     background: color-mix(in srgb, var(--dp-panel) 35%, transparent);
     &::-webkit-scrollbar { height: 3px; width: 3px; }
     &::-webkit-scrollbar-thumb { background: var(--dp-border); border-radius: 2px; }
+    &.dp-empty-collapsed { width: 0; padding: 0; border-right: none; overflow: hidden; }
 
     /* Compress each shortcut row so all 5 fit without scrolling */
-    .dp-pop-sc { padding: 5px 12px; font-size: 10.5px; }
+    .dp-pop-sc { padding: 5px 6px; font-size: calc(var(--dp-font-size-shortcuts, 11px) - 0.5px); }
     .dp-pop-div { margin: 3px 12px; }
-    .dp-pop-dyn { padding: 4px 12px 6px; }
-    .dp-pop-dynlbl { margin-bottom: 3px; font-size: 9px; }
 
     /* Number box: wide enough to never clip, spinner arrows removed entirely
        (value is changed via keyboard typing or mouse scroll-wheel over the field) */
-    .dp-pop-dynbox { padding: 2px 5px; }
+    .dp-pop-dynbox { padding: 0 3px; }
     .dp-pop-dynin {
-        width: 22px; font-size: 11px; font-weight: 500;
+        width: 24px;
         &::-webkit-inner-spin-button, &::-webkit-outer-spin-button {
             -webkit-appearance: none; margin: 0; display: none;
         }
@@ -461,45 +635,73 @@
 
 /* Column 2 (middle): calendar — takes remaining space, compressed vertically as much as possible */
 .dp-horiz-cal {
-    flex: 1; min-width: 200px; gap: 2px; padding-top: 2px; padding-bottom: 2px;
+    flex: 1; min-width: 110px; gap: 2px; padding-top: 2px; padding-bottom: 2px;
     .dp-pop-calh { gap: 4px; }
-    .dp-pop-my select { font-size: 13px; padding: 1px 3px; }
+    .dp-pop-my select { font-size: calc(var(--dp-font-size-content, 12px) - 1px); padding: 1px 3px; }
     .dp-pop-nav { width: 20px; height: 20px; font-size: 13px; }
-    .dp-pop-grid { flex: 1; gap: 1px; }
-    .dp-pop-wds { padding-bottom: 0; .dp-pop-wd { padding: 0; font-size: 9px; } }
-    .dp-pop-day { min-height: 16px; font-size: 10.5px; border-radius: 4px; }
-    .dp-pop-wn { font-size: 8px; }
-    .dp-period-cell { min-height: 22px; font-size: 10.5px; }
-    .dp-pop-yrlabel { font-size: 12px; }
+    .dp-pop-grid { flex: 1; gap: 1px; overflow-y: auto; .dp-thin-scrollbar(); }
+    .dp-pop-wds { padding-bottom: 0; .dp-pop-wd { padding: 0; font-size: calc(var(--dp-font-size-content, 12px) - 3.5px); } }
+    .dp-pop-day { min-height: 16px; font-size: calc(var(--dp-font-size-content, 12px) - 1.5px); border-radius: 4px; }
+    .dp-pop-wn { font-size: calc(var(--dp-font-size-content, 12px) - 4px); }
+    .dp-period-cell { min-height: 22px; font-size: calc(var(--dp-font-size-content, 12px) - 1.5px); }
+    .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-content, 12px) - 1.5px); }
 }
+// Same per-granularity adaptive reductions as the vertical/popup modes, layered on top of
+// the already-compact horizontal base above — Q/S/W still shrink further than M/D/Y here.
+// Three classes deep (vs the base rules' two) so these reliably win regardless of source
+// order, since .dp-cal-area-X is a child of .dp-horiz-cal, not the same element.
+.dp-horiz-cal .dp-cal-area-q .dp-period-cell, .dp-horiz-cal .dp-cal-area-q .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-content, 12px) - 3px); }
+.dp-horiz-cal .dp-cal-area-s .dp-period-cell, .dp-horiz-cal .dp-cal-area-s .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-content, 12px) - 5px); }
+.dp-horiz-cal .dp-cal-area-w .dp-period-cell, .dp-horiz-cal .dp-cal-area-w .dp-pop-my select { font-size: calc(var(--dp-font-size-content, 12px) - 4.5px); }
 
 /* Column 3 (rightmost): start/end dates + day count + actions, all in one panel */
 .dp-horiz-side {
-    width: 118px; flex-shrink: 0; border-right: none;
+    width: 90px; flex-shrink: 0; border-right: none; overflow-x: hidden;
     display: flex; flex-direction: column;
-    justify-content: center; align-items: stretch;
-    gap: 6px; padding: 6px 8px;
+    justify-content: flex-start; align-items: stretch;
+    gap: 2px; padding: 2px 3px;
+    overflow-y: auto;
+    .dp-thin-scrollbar();
+    font-family: var(--dp-font-family-side, "Segoe UI", sans-serif);
 
     .dp-pop-iw {
-        align-items: center; text-align: center;
+        align-items: center; justify-content: center; text-align: center;
+        padding: 1px 3px; gap: 0; border-width: 1px;
         label {
             justify-content: center; width: 100%;
             &::before { display: none; }
         }
-        input { font-size: 10.5px; text-align: center; }
+        input { text-align: center; }
     }
     .dp-horiz-infotext {
-        font-size: 11px; font-weight: 600; color: var(--dp-value);
+        font-size: var(--dp-font-size-side, 10px); font-weight: 600; color: var(--dp-value);
         text-align: center; opacity: 0.95;
     }
     .dp-horiz-btnrow {
-        display: flex; flex-direction: column; gap: 4px;
+        display: flex; flex-direction: row; gap: 3px;
         .dp-pop-btn {
-            width: 100%; text-align: center;
-            padding: 4px 8px; font-size: 10.5px; border-radius: 4px;
-            box-shadow: none;
+            flex: 1; min-width: 0; text-align: center;
+            padding: 3px 4px; font-size: var(--dp-font-size-side, 9px); border-radius: 4px;
+            box-shadow: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             &:hover { box-shadow: none; }
         }
+    }
+    // Same compacting as .dp-horiz-btnrow .dp-pop-btn just above — Auto/Man. and
+    // Cancel/Apply must take up exactly the same amount of space in this narrow column,
+    // not just share font/padding values that happen to render differently once flex:1
+    // and flex-wrap enter the picture.
+    .dp-autogran-toggle {
+        gap: 3px;
+        // .dp-autogran-vertical (the row wrapping this) centers its children instead of
+        // stretching them, so without this the toggle just sizes to its own two buttons'
+        // natural content width — nowhere near .dp-horiz-btnrow's full column width — and
+        // "Man." has no room left to avoid clipping even with matching padding/font-size.
+        align-self: stretch; width: 100%;
+    }
+    .dp-autogran-btn {
+        flex: 1; min-width: 0; text-align: center;
+        padding: 3px 4px; font-size: var(--dp-font-size-side, 9px); border-radius: 4px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 }
 
