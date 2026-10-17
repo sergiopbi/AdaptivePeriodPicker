@@ -13,6 +13,7 @@ html, body { height: 100%; margin: 0; padding: 0; }
 :root, .dp-dlg {
     --dp-bg:           #1e3055;
     --dp-panel:        #16243f;
+    --dp-font-family:  "Segoe UI", sans-serif;
     --dp-accent:       #2d6bc4;
     --dp-title:        #9ab0cc;
     --dp-value:        #ffffff;
@@ -30,7 +31,7 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .dp-dlg {
     width: 100%; height: 100%;
     background: var(--dp-bg); color: var(--dp-value);
-    font-family: var(--dp-font-family-content, "Segoe UI", sans-serif); font-size: 12px;
+    font-family: var(--dp-font-family, "Segoe UI", sans-serif); font-size: 12px;
     display: flex; flex-direction: column;
     overflow: hidden; user-select: none;
     -webkit-font-smoothing: antialiased;
@@ -40,13 +41,16 @@ html, body { height: 100%; margin: 0; padding: 0; }
 
 /* ── GRANULARITY BAR: the first thing you pick, always pinned to the top ── */
 .dp-gran-bar {
-    display: flex; gap: 4px; padding: 8px 12px; flex-shrink: 0;
-    background: var(--dp-panel); border-bottom: var(--dp-border-width) solid var(--dp-border);
+    display: flex; align-items: center; gap: 4px; padding: 8px 12px; flex-shrink: 0;
+    // align-items:center (not the flex default, stretch) so each button sizes to its
+    // own padding+content (--dp-zone-gran-boxsize below actually has an effect) instead
+    // of being forced to fill whatever height the bar's drag-resizer (vGranBar) set.
+    background: var(--dp-zone-gran-bg, var(--dp-panel)); border-bottom: var(--dp-border-width) solid var(--dp-border);
 }
 .dp-gran-btn {
-    flex: 1; padding: 5px 0; border-radius: 5px; font-size: var(--dp-font-size-gran, 11px); font-weight: 700;
-    font-family: var(--dp-font-family-gran, "Segoe UI", sans-serif); cursor: pointer; text-align: center;
-    background: transparent; color: var(--dp-title); border: 1.5px solid var(--dp-border);
+    flex: 1; padding: var(--dp-zone-gran-boxsize, 5px) 0; border-radius: var(--dp-zone-gran-radius, 5px); font-size: var(--dp-font-size-gran, 11px); font-weight: 700;
+    font-family: var(--dp-font-family, "Segoe UI", sans-serif); cursor: pointer; text-align: center;
+    background: var(--dp-zone-gran-box-bg, transparent); color: var(--dp-title); border: 1.5px solid var(--dp-border);
     transition: all 0.12s;
     &:hover { background: rgba(255,255,255,0.06); color: var(--dp-value); }
     &.active {
@@ -59,14 +63,14 @@ html, body { height: 100%; margin: 0; padding: 0; }
     width: 96px; flex-shrink: 0;
     border-right: var(--dp-border-width) solid var(--dp-border);
     overflow-y: auto; overflow-x: hidden; padding: 10px 0;
-    background: color-mix(in srgb, var(--dp-panel) 35%, transparent);
+    background: var(--dp-zone-shortcuts-bg, color-mix(in srgb, var(--dp-panel) 35%, transparent));
     &::-webkit-scrollbar { width: 3px; }
     &::-webkit-scrollbar-thumb { background: var(--dp-border); border-radius: 2px; }
     &.dp-empty-collapsed { width: 0; padding: 0; border-right: none; overflow: hidden; }
 }
 .dp-dlg-sc {
-    padding: 8px 10px; cursor: pointer; font-size: var(--dp-font-size-shortcuts, 11px); color: var(--dp-title);
-    font-family: var(--dp-font-family-shortcuts, "Segoe UI", sans-serif);
+    padding: var(--dp-zone-shortcuts-boxsize, 8px) 10px; cursor: pointer; font-size: var(--dp-font-size-shortcuts, 11px); color: var(--dp-title);
+    font-family: var(--dp-font-family, "Segoe UI", sans-serif);
     font-weight: 400; transition: all 0.12s; opacity: 0.85;
     border-left: 2px solid transparent;
     &:hover { background: rgba(255,255,255,0.05); color: var(--dp-value); opacity: 1; }
@@ -85,8 +89,8 @@ html, body { height: 100%; margin: 0; padding: 0; }
     .dp-dlg-dynlbl { white-space: nowrap; }
     .dp-dlg-dynbox {
         flex-shrink: 0;
-        background: var(--dp-panel); border: var(--dp-border-width) solid var(--dp-border);
-        border-radius: 4px; padding: 0 3px; transition: border-color 0.15s;
+        background: var(--dp-zone-shortcuts-box-bg, var(--dp-panel)); border: var(--dp-border-width) solid var(--dp-border);
+        border-radius: var(--dp-zone-shortcuts-radius, 4px); padding: 0 3px; transition: border-color 0.15s;
         &:focus-within { border-color: var(--dp-accent); }
     }
     .dp-dlg-dynin {
@@ -111,6 +115,7 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .dp-dlg-cal {
     flex: 1; display: flex; flex-direction: column; min-width: 0;
     padding: 0 10px 0; gap: 0; overflow: hidden; min-height: 0;
+    background: var(--dp-zone-cal-bg, transparent); border-radius: 6px;
 }
 
 /* ── DRAG-TO-RESIZE HANDLES — same behaviour as the inline modes (see visual.less) ── */
@@ -145,21 +150,26 @@ html, body { height: 100%; margin: 0; padding: 0; }
 /* Auto-gran row and footer each resize independently now — no shared wrapper. */
 
 .dp-dlg-inputs {
-    display: flex; gap: 8px; flex-shrink: 0; overflow: hidden;
-    font-family: var(--dp-font-family-side, "Segoe UI", sans-serif);
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0; overflow: hidden;
+    // align-items:center — see visual.less's identical .dp-pop-inputs fix for why.
+    font-family: var(--dp-font-family, "Segoe UI", sans-serif);
     // Own horizontal padding now — see visual.ts's identical .dp-pop-inputs change for why.
     padding: 4px 10px;
+    // The Dates zone's own outer "shape" — independent of each date box's own
+    // background (.dp-dlg-iw, below). Defaults to fully transparent.
+    background: var(--dp-zone-dates-bg, transparent);
     .dp-dlg-iw {
         flex: 1; display: flex; flex-direction: column; gap: 2px;
-        padding: 4px 8px; border-radius: 5px;
+        padding: var(--dp-zone-dates-boxsize, 4px) 8px; border-radius: var(--dp-zone-dates-radius, 5px);
         border: 1.5px solid transparent;
-        background: color-mix(in srgb, var(--dp-panel) 60%, transparent);
+        // Independent BOX background — see visual.less's identical .dp-pop-iw fix.
+        background: var(--dp-zone-dates-box-bg, color-mix(in srgb, var(--dp-panel) 60%, transparent));
         transition: all 0.18s;
-        align-items: center; text-align: center;
+        align-items: center; justify-content: center; text-align: center;
 
         label {
             // Same font-size as the date value below — see visual.less's identical fix.
-            font-size: var(--dp-font-size-side, 11px); color: var(--dp-title); text-transform: uppercase;
+            font-size: var(--dp-font-size-dates, 11px); color: var(--dp-title); text-transform: uppercase;
             letter-spacing: 0.5px; font-weight: 600; opacity: 0.7;
             display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%;
             &::before {
@@ -169,7 +179,7 @@ html, body { height: 100%; margin: 0; padding: 0; }
         }
         input {
             background: transparent; border: none;
-            color: var(--dp-value); font-size: var(--dp-font-size-side, 11px); font-weight: 600;
+            color: var(--dp-value); font-size: var(--dp-font-size-dates, 11px); font-weight: 600;
             padding: 0; font-family: inherit; width: 100%; text-align: center;
             &:focus { outline: none; }
             &::placeholder { color: var(--dp-title); opacity: 0.5; font-weight: 400; }
@@ -178,7 +188,7 @@ html, body { height: 100%; margin: 0; padding: 0; }
 
         &.dp-step-current {
             border-color: var(--dp-accent);
-            background: color-mix(in srgb, var(--dp-accent) 12%, var(--dp-panel));
+            background: color-mix(in srgb, var(--dp-accent) 12%, var(--dp-zone-dates-box-bg, var(--dp-panel)));
             label { opacity: 1; color: var(--dp-value); &::before { opacity: 1; background: var(--dp-accent); } }
         }
         &.dp-step-done:not(.dp-step-current) {
@@ -195,7 +205,7 @@ html, body { height: 100%; margin: 0; padding: 0; }
 
 .dp-dlg-calh {
     display: flex; align-items: center; justify-content: center; gap: 10px; flex-shrink: 0;
-    font-family: var(--dp-font-family-content, "Segoe UI", sans-serif);
+    font-family: var(--dp-font-family, "Segoe UI", sans-serif);
     .dp-dlg-nav {
         background: transparent; border: none;
         color: var(--dp-title); font-size: 16px; width: 26px; height: 26px;
@@ -211,7 +221,7 @@ html, body { height: 100%; margin: 0; padding: 0; }
             background: transparent; border: none;
             // Same var as .dp-dlg-period-cell/.dp-dlg-yrlabel — see visual.less's
             // .dp-pop-my select for why (this IS the header for D/M/W).
-            color: var(--dp-value); font-size: var(--dp-font-size-content, 12px); font-weight: 700; padding: 3px 4px;
+            color: var(--dp-value); font-size: var(--dp-font-size-cal, 12px); font-weight: 700; padding: 3px 4px;
             font-family: inherit; cursor: pointer; border-radius: 4px;
             transition: background 0.15s;
             &:hover { background: rgba(255,255,255,0.06); }
@@ -223,13 +233,13 @@ html, body { height: 100%; margin: 0; padding: 0; }
 
 .dp-dlg-grid {
     flex: 1; display: flex; flex-direction: column; gap: 3px; overflow: hidden; min-height: 0;
-    font-family: var(--dp-font-family-content, "Segoe UI", sans-serif);
+    font-family: var(--dp-font-family, "Segoe UI", sans-serif);
 }
 .dp-dlg-wds {
     display: grid; grid-template-columns: 0.65fr repeat(7,1fr); gap: 0 2px;
     padding-bottom: 2px;
-    .dp-dlg-wd { text-align: center; font-size: calc(var(--dp-font-size-content, 12px) - 2.5px); color: var(--dp-title); padding: 2px 0; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; }
-    .dp-dlg-wn-header { opacity: 0.4; font-size: calc(var(--dp-font-size-content, 12px) - 3.5px); }
+    .dp-dlg-wd { text-align: center; font-size: calc(var(--dp-font-size-cal, 12px) - 2.5px); color: var(--dp-title); padding: 2px 0; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; }
+    .dp-dlg-wn-header { opacity: 0.4; font-size: calc(var(--dp-font-size-cal, 12px) - 3.5px); }
 }
 .dp-dlg-days {
     flex: 1; display: grid; grid-template-columns: 0.65fr repeat(7,1fr);
@@ -237,14 +247,14 @@ html, body { height: 100%; margin: 0; padding: 0; }
 }
 .dp-dlg-wn {
     display: flex; align-items: center; justify-content: center;
-    font-size: calc(var(--dp-font-size-content, 12px) - 3px); color: var(--dp-title); opacity: 0.45;
+    font-size: calc(var(--dp-font-size-cal, 12px) - 3px); color: var(--dp-title); opacity: 0.45;
     border-right: 1px dashed var(--dp-border); margin-right: 3px;
 }
 .dp-dlg-day {
     position: relative;
     display: flex; align-items: center; justify-content: center;
-    font-size: var(--dp-font-size-content, 11.5px); color: var(--dp-title); cursor: pointer;
-    border-radius: 6px; transition: background 0.1s, color 0.1s; min-height: 20px;
+    font-size: var(--dp-font-size-cal, 11.5px); color: var(--dp-title); cursor: pointer;
+    border-radius: var(--dp-zone-cal-radius, 6px); transition: background 0.1s, color 0.1s; min-height: var(--dp-zone-cal-boxsize, 20px);
     &:hover:not(.empty):not(.rs):not(.re) { background: rgba(255,255,255,0.08); color: var(--dp-value); }
     &.empty { pointer-events: none; }
     &.future:not(.rs):not(.re):not(.in-range) { opacity: 0.4; }
@@ -286,12 +296,12 @@ html, body { height: 100%; margin: 0; padding: 0; }
        content, give literally everything else to the second row" — no implicit
        min-height traps to reason about. */
 }
-.dp-dlg-yrlabel { font-weight: 700; font-size: var(--dp-font-size-content, 12px); color: var(--dp-value); letter-spacing: 0.2px; }
+.dp-dlg-yrlabel { font-weight: 700; font-size: var(--dp-font-size-cal, 12px); color: var(--dp-value); letter-spacing: 0.2px; }
 
 // Adaptive per-granularity reduction — see visual.less's identical .dp-cal-area-X rules.
-.dp-dlg-cal-area-q .dp-dlg-period-cell, .dp-dlg-cal-area-q .dp-dlg-yrlabel { font-size: calc(var(--dp-font-size-content, 12px) - 1.5px); }
-.dp-dlg-cal-area-s .dp-dlg-period-cell, .dp-dlg-cal-area-s .dp-dlg-yrlabel { font-size: calc(var(--dp-font-size-content, 12px) - 3.5px); }
-.dp-dlg-cal-area-w .dp-dlg-period-cell, .dp-dlg-cal-area-w .dp-dlg-my select { font-size: calc(var(--dp-font-size-content, 12px) - 3px); }
+.dp-dlg-cal-area-q .dp-dlg-period-cell, .dp-dlg-cal-area-q .dp-dlg-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 1.5px); }
+.dp-dlg-cal-area-s .dp-dlg-period-cell, .dp-dlg-cal-area-s .dp-dlg-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 3.5px); }
+.dp-dlg-cal-area-w .dp-dlg-period-cell, .dp-dlg-cal-area-w .dp-dlg-my select { font-size: calc(var(--dp-font-size-cal, 12px) - 3px); }
 
 /* Mirrors .dp-dlg-days exactly (single element, flex:1, display:grid, direct child
    of .dp-dlg-grid) — the previous wrapper+innergrid split for period views (a
@@ -310,8 +320,8 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .dp-dlg-period-cell {
     position: relative;
     display: flex; align-items: center; justify-content: center;
-    font-size: var(--dp-font-size-content, 12px); color: var(--dp-title); cursor: pointer; font-weight: 600;
-    border-radius: 6px; transition: background 0.1s, color 0.1s; min-height: 0;
+    font-size: var(--dp-font-size-cal, 12px); color: var(--dp-title); cursor: pointer; font-weight: 600;
+    border-radius: var(--dp-zone-cal-radius, 6px); transition: background 0.1s, color 0.1s; min-height: 0;
     border: 1.5px solid var(--dp-border);
     &:hover:not(.rs):not(.re) { background: rgba(255,255,255,0.08); color: var(--dp-value); }
 
@@ -343,14 +353,14 @@ html, body { height: 100%; margin: 0; padding: 0; }
 
 .dp-dlg-autogran-row {
     display: flex; align-items: center; gap: 8px;
-    padding: 6px 14px; background: var(--dp-panel); overflow: hidden;
+    padding: 6px 14px; background: var(--dp-zone-control-bg, var(--dp-panel)); overflow: hidden;
     border-top: var(--dp-border-width) solid var(--dp-border); flex-shrink: 0;
-    font-family: var(--dp-font-family-side, "Segoe UI", sans-serif);
+    font-family: var(--dp-font-family, "Segoe UI", sans-serif);
 
     .dp-dlg-autogran-toggle { display: flex; gap: 3px; flex-shrink: 0; }
     .dp-dlg-autogran-btn {
         // Matches .dp-dlg-btn (Cancel/Apply) — see visual.less's identical fix.
-        padding: 5px 14px; border-radius: 5px; font-size: var(--dp-font-size-side, 11.5px); font-weight: 600;
+        padding: var(--dp-zone-control-boxsize, 5px) 14px; border-radius: var(--dp-zone-control-radius, 5px); font-size: var(--dp-font-size-control, 11.5px); font-weight: 600;
         font-family: inherit; cursor: pointer; text-align: center;
         background: transparent; color: var(--dp-title); border: 1.5px solid var(--dp-border);
         transition: all 0.12s;
@@ -360,37 +370,37 @@ html, body { height: 100%; margin: 0; padding: 0; }
         }
     }
     .dp-dlg-autogran-info {
-        font-size: var(--dp-font-size-side, 13px); color: var(--dp-title); cursor: help; flex-shrink: 0;
+        font-size: var(--dp-font-size-control, 13px); color: var(--dp-title); cursor: help; flex-shrink: 0;
         opacity: 0.75;
         &:hover { opacity: 1; }
     }
     .dp-dlg-autogran-select {
-        font-family: inherit; font-size: var(--dp-font-size-side, 11px); padding: 3px 6px; border-radius: 4px;
+        font-family: inherit; font-size: var(--dp-font-size-control, 11px); padding: 3px 6px; border-radius: var(--dp-zone-control-radius, 4px);
         background: var(--dp-bg); color: var(--dp-value); border: 1px solid var(--dp-border);
         flex-shrink: 0;
     }
     .dp-dlg-autogran-effective {
-        font-size: var(--dp-font-size-side, 11px); color: var(--dp-title); opacity: 0.9; flex: 1; text-align: right;
+        font-size: var(--dp-font-size-control, 11px); color: var(--dp-title); opacity: 0.9; flex: 1; text-align: right;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
     }
 }
 
 .dp-dlg-footer {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px;
-    padding: 5px 10px; background: var(--dp-panel);
+    padding: 5px 10px; background: var(--dp-zone-control-bg, var(--dp-panel));
     border-top: var(--dp-border-width) solid var(--dp-border); flex-shrink: 0;
-    font-family: var(--dp-font-family-side, "Segoe UI", sans-serif);
+    font-family: var(--dp-font-family, "Segoe UI", sans-serif);
 
     .dp-dlg-info {
         display: flex; flex-wrap: wrap; gap: 0 6px; min-width: 0;
-        font-size: var(--dp-font-size-side, 12.5px); font-weight: 600; color: var(--dp-value); flex: 1;
+        font-size: var(--dp-font-size-control, 12.5px); font-weight: 600; color: var(--dp-value); flex: 1;
         letter-spacing: 0.1px; opacity: 0.95;
         span { white-space: nowrap; }
     }
     .dp-dlg-footer-btns { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 
     .dp-dlg-btn {
-        padding: 5px 14px; border-radius: 5px; font-size: var(--dp-font-size-side, 11.5px);
+        padding: var(--dp-zone-control-boxsize, 5px) 14px; border-radius: var(--dp-zone-control-radius, 5px); font-size: var(--dp-font-size-control, 11.5px);
         font-family: inherit; cursor: pointer; border: 1.5px solid transparent;
         transition: all 0.15s; font-weight: 600;
 

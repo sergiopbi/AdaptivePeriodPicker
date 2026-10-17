@@ -29,16 +29,36 @@ export interface DialogInitialState {
     granVisible?: Record<Gran,boolean>;
     granThresholds?: Record<Exclude<Gran,"D">,number>;
     lockResizers?: boolean;
+    // Pre-resolved D/W/M/Q/S/Y button labels (override from "Texto da Granularidade" if
+    // set, else the language-appropriate default) — resolved by visual.ts once, via
+    // granLabelsResolved(), so this bundle doesn't need its own copy of that logic.
+    granLabelsText?: Record<Gran,string>;
     colors?: {
-        bg: string; bgOpacity: number; panel: string; panelOpacity: number; accent: string;
-        title: string; value: string; accentText: string;
+        bg: string; bgOpacity: number; hoverRevealOpacity: number; fontFamily: string;
+        // Generic fallback only now (anything outside all 5 zones, e.g. Apply/Cancel) —
+        // each zone's own selected/unselected/value colors (below) take over inside it.
+        accent: string; title: string; value: string; accentText: string;
         borderColor: string; borderWidth: number;
         resizerColor: string; resizerThickness: number;
-        // pt values; see the three font pairs in the "Cores e Texto" card
-        fontFamilyGran: string; fontSizeGran: number;
-        fontFamilyShortcuts: string; fontSizeShortcuts: number;
-        fontFamilyContent: string; fontSizeContent: number;
-        fontFamilySide: string; fontSizeSide: number;
+        // 5 fully independent zones (background, corner radius, box size, font size,
+        // AND now their own selected/selected-text/unselected/value colors) — see
+        // visual.ts's applyColors() for the full rationale; mirrored here since the
+        // pop-up dialog is a separate DOM/CSS instance that never shares the inline
+        // visual's own styling. Three zones (gran/dates/shortcuts) also carry a second,
+        // independent "box" background — see visual.ts/visual.less for why.
+        zoneGranColor: string; zoneGranOpacity: number; zoneGranRadius: number; zoneGranBoxSize: number; zoneGranFontSize: number;
+        zoneGranBoxColor: string; zoneGranBoxOpacity: number;
+        zoneGranSelectedColor: string; zoneGranSelectedTextColor: string; zoneGranUnselectedColor: string; zoneGranValueColor: string;
+        zoneDatesColor: string; zoneDatesOpacity: number; zoneDatesRadius: number; zoneDatesBoxSize: number; zoneDatesFontSize: number;
+        zoneDatesBoxColor: string; zoneDatesBoxOpacity: number;
+        zoneDatesSelectedColor: string; zoneDatesSelectedTextColor: string; zoneDatesUnselectedColor: string; zoneDatesValueColor: string;
+        zoneShortcutsColor: string; zoneShortcutsOpacity: number; zoneShortcutsRadius: number; zoneShortcutsBoxSize: number; zoneShortcutsFontSize: number;
+        zoneShortcutsBoxColor: string; zoneShortcutsBoxOpacity: number;
+        zoneShortcutsSelectedColor: string; zoneShortcutsSelectedTextColor: string; zoneShortcutsUnselectedColor: string; zoneShortcutsValueColor: string;
+        zoneCalColor: string; zoneCalOpacity: number; zoneCalRadius: number; zoneCalBoxSize: number; zoneCalFontSize: number;
+        zoneCalSelectedColor: string; zoneCalSelectedTextColor: string; zoneCalUnselectedColor: string; zoneCalValueColor: string;
+        zoneControlColor: string; zoneControlOpacity: number; zoneControlRadius: number; zoneControlBoxSize: number; zoneControlFontSize: number;
+        zoneControlSelectedColor: string; zoneControlSelectedTextColor: string; zoneControlUnselectedColor: string; zoneControlValueColor: string;
     };
 }
 export interface DialogResultState {
@@ -79,6 +99,7 @@ export class DatePickerDialog {
     private granAuto = true;
     private manualGranOverride: Gran|null = null;
     private granVisibleMap: Record<Gran,boolean> = {D:true,W:true,M:true,Q:true,S:true,Y:true};
+    private granLabelsText: Record<Gran,string> = {D:"D",W:"W",M:"M",Q:"Q",S:"S",Y:"Y"};
     private granThresholdsMap: Record<Exclude<Gran,"D">,number> = {W:2,M:2,Q:2,S:2,Y:2};
     private autoGranRow!: HTMLElement;
     private manualGranSelect!: HTMLSelectElement;
@@ -87,6 +108,10 @@ export class DatePickerDialog {
     private shortcutsEl!: HTMLElement;
     private calAreaEl!:   HTMLElement;
     private calDaysEl!:   HTMLElement;
+    // Root element of the "Datas Início/Fim" zone — mirrors visual.ts's datesWrapEl,
+    // used to scope that zone's own selected/unselected/value colors to just this
+    // subtree (plain CSS custom-property scoping, see the constructor's setZone below).
+    private datesWrapEl: HTMLElement|null = null;
     private mSel!:        HTMLSelectElement;
     private ySel!:        HTMLSelectElement;
     private yearRangeLbl: HTMLElement|null = null;
@@ -133,6 +158,7 @@ export class DatePickerDialog {
         this.applyImmediate=state.applyImmediate??false;
         this.granAuto=state.granAutoDefault??true;
         if(state.granVisible) this.granVisibleMap=state.granVisible;
+        if(state.granLabelsText) this.granLabelsText=state.granLabelsText;
         if(state.granThresholds) this.granThresholdsMap=state.granThresholds;
         this.resizersLocked=state.lockResizers??false;
         if (state.refDate) { const d=new Date(state.refDate); if(!isNaN(d.getTime())) this.refDate=d; }
@@ -143,26 +169,57 @@ export class DatePickerDialog {
         this.build(options.element);
         if (state.colors) {
             const s = options.element.style;
-            s.setProperty("--dp-bg",           `color-mix(in srgb, ${state.colors.bg} ${100-Math.max(0,Math.min(100,state.colors.bgOpacity??0))}%, transparent)`);
-            s.setProperty("--dp-panel",        `color-mix(in srgb, ${state.colors.panel} ${100-Math.max(0,Math.min(100,state.colors.panelOpacity??0))}%, transparent)`);
-            s.setProperty("--dp-accent",       state.colors.accent);
-            s.setProperty("--dp-title",        state.colors.title);
-            s.setProperty("--dp-value",        state.colors.value);
-            s.setProperty("--dp-accent-text",  state.colors.accentText);
-            s.setProperty("--dp-border",       state.colors.borderColor);
-            s.setProperty("--dp-border-width", `${state.colors.borderWidth}px`);
-            s.setProperty("--dp-resizer-color",     state.colors.resizerColor);
-            s.setProperty("--dp-resizer-thickness", `${state.colors.resizerThickness||1}px`);
-            // Three independent zones, each with a real font-family and font-size — no
-            // more global zoom. pt→px: 1pt = 4/3px, the standard CSS conversion factor.
-            s.setProperty("--dp-font-family-gran",      state.colors.fontFamilyGran);
-            s.setProperty("--dp-font-size-gran",        `${(state.colors.fontSizeGran||7)*4/3}px`);
-            s.setProperty("--dp-font-family-shortcuts", state.colors.fontFamilyShortcuts);
-            s.setProperty("--dp-font-size-shortcuts",   `${(state.colors.fontSizeShortcuts||9)*4/3}px`);
-            s.setProperty("--dp-font-family-content",   state.colors.fontFamilyContent);
-            s.setProperty("--dp-font-size-content",     `${(state.colors.fontSizeContent||9)*4/3}px`);
-            s.setProperty("--dp-font-family-side",      state.colors.fontFamilySide);
-            s.setProperty("--dp-font-size-side",        `${(state.colors.fontSizeSide||9)*4/3}px`);
+            const col = state.colors;
+            s.setProperty("--dp-bg",           `color-mix(in srgb, ${col.bg} ${100-Math.max(0,Math.min(100,col.bgOpacity??0))}%, transparent)`);
+            s.setProperty("--dp-hover-reveal-bg", `color-mix(in srgb, ${col.bg} ${100-Math.max(0,Math.min(100,col.hoverRevealOpacity??0))}%, transparent)`);
+            s.setProperty("--dp-font-family",  col.fontFamily||"Segoe UI");
+            // Generic fallback for anything outside all 5 zone elements (e.g. the
+            // Apply/Cancel buttons) — each zone below overrides these on its own root
+            // element, which wins via normal CSS cascade (more specific element wins).
+            s.setProperty("--dp-accent",       col.accent);
+            s.setProperty("--dp-title",        col.title);
+            s.setProperty("--dp-value",        col.value);
+            s.setProperty("--dp-accent-text",  col.accentText);
+            s.setProperty("--dp-border",       col.borderColor);
+            s.setProperty("--dp-border-width", `${col.borderWidth}px`);
+            s.setProperty("--dp-resizer-color",     col.resizerColor);
+            s.setProperty("--dp-resizer-thickness", `${col.resizerThickness||1}px`);
+            // 5 fully independent zones — background, corner radius, box size, font size,
+            // and now their own selected/selected-text/unselected/value colors, each. The
+            // 4 colors are set on the zone's OWN root element (zoneEl), not on the dialog
+            // root, so they only cascade to that zone's own descendants — every selector
+            // in dialog.less already just reads var(--dp-accent) etc. unchanged, no
+            // renaming needed (same scoping trick as visual.ts's applyColors/setZone).
+            // pt→px: 1pt = 4/3px, the standard CSS conversion factor. Three zones
+            // (gran/dates/shortcuts) also carry a second, independent "box" background —
+            // see visual.ts/visual.less for why.
+            const zOp=(v:number|undefined,def:number)=>100-Math.max(0,Math.min(100,v??def));
+            const setZone=(key:string, color:string, opacity:number|undefined, defOpacity:number, radius:number|undefined, defRadius:number, boxSize:number|undefined, defBoxSize:number, fontSize:number|undefined, defFontSize:number, zoneColors:{selected:string,selectedText:string,unselected:string,value:string}, zoneEl?:HTMLElement|null, box?:{color:string,opacity:number|undefined,defOpacity:number})=>{
+                s.setProperty(`--dp-zone-${key}-bg`,      `color-mix(in srgb, ${color||"#16243f"} ${zOp(opacity,defOpacity)}%, transparent)`);
+                s.setProperty(`--dp-zone-${key}-radius`,  `${radius??defRadius}px`);
+                s.setProperty(`--dp-zone-${key}-boxsize`, `${boxSize??defBoxSize}px`);
+                s.setProperty(`--dp-font-size-${key}`,    `${(fontSize||defFontSize)*4/3}px`);
+                if(box) s.setProperty(`--dp-zone-${key}-box-bg`, `color-mix(in srgb, ${box.color||"#16243f"} ${zOp(box.opacity,box.defOpacity)}%, transparent)`);
+                if(zoneEl){
+                    zoneEl.style.setProperty("--dp-accent",      zoneColors.selected||"#2d6bc4");
+                    zoneEl.style.setProperty("--dp-accent-text", zoneColors.selectedText||"#ffffff");
+                    zoneEl.style.setProperty("--dp-title",       zoneColors.unselected||"#9ab0cc");
+                    zoneEl.style.setProperty("--dp-value",       zoneColors.value||"#ffffff");
+                }
+            };
+            setZone("gran",      col.zoneGranColor,      col.zoneGranOpacity,      0,   col.zoneGranRadius,      5, col.zoneGranBoxSize,      5,  col.zoneGranFontSize,      7,
+                {selected:col.zoneGranSelectedColor, selectedText:col.zoneGranSelectedTextColor, unselected:col.zoneGranUnselectedColor, value:col.zoneGranValueColor}, this.granBarEl,
+                {color:col.zoneGranBoxColor,      opacity:col.zoneGranBoxOpacity,      defOpacity:100});
+            setZone("dates",     col.zoneDatesColor,     col.zoneDatesOpacity,     100, col.zoneDatesRadius,     5, col.zoneDatesBoxSize,     3,  col.zoneDatesFontSize,     9,
+                {selected:col.zoneDatesSelectedColor, selectedText:col.zoneDatesSelectedTextColor, unselected:col.zoneDatesUnselectedColor, value:col.zoneDatesValueColor}, this.datesWrapEl,
+                {color:col.zoneDatesBoxColor,     opacity:col.zoneDatesBoxOpacity,     defOpacity:40});
+            setZone("shortcuts", col.zoneShortcutsColor, col.zoneShortcutsOpacity, 65,  col.zoneShortcutsRadius, 4, col.zoneShortcutsBoxSize, 8,  col.zoneShortcutsFontSize, 9,
+                {selected:col.zoneShortcutsSelectedColor, selectedText:col.zoneShortcutsSelectedTextColor, unselected:col.zoneShortcutsUnselectedColor, value:col.zoneShortcutsValueColor}, this.shortcutsEl,
+                {color:col.zoneShortcutsBoxColor, opacity:col.zoneShortcutsBoxOpacity, defOpacity:65});
+            setZone("cal",       col.zoneCalColor,       col.zoneCalOpacity,       100, col.zoneCalRadius,       6, col.zoneCalBoxSize,       24, col.zoneCalFontSize,       9,
+                {selected:col.zoneCalSelectedColor, selectedText:col.zoneCalSelectedTextColor, unselected:col.zoneCalUnselectedColor, value:col.zoneCalValueColor}, this.calAreaEl);
+            setZone("control",   col.zoneControlColor,   col.zoneControlOpacity,   0,   col.zoneControlRadius,   5, col.zoneControlBoxSize,   5,  col.zoneControlFontSize,   9,
+                {selected:col.zoneControlSelectedColor, selectedText:col.zoneControlSelectedTextColor, unselected:col.zoneControlUnselectedColor, value:col.zoneControlValueColor}, this.autoGranRow);
         }
     }
 
@@ -201,6 +258,7 @@ export class DatePickerDialog {
         this.inputWrapEnd = we;
 
         di.append(ws,we);
+        this.datesWrapEl=di;
         // Start/End is now a full-width strip of its own — a root-level sibling of `body`,
         // not nested inside the calendar column — see visual.ts's identical change for why.
         root.append(di, this.addResizer("row",di,1,"pDateInputs",0,80,46,undefined,46));
@@ -300,7 +358,7 @@ export class DatePickerDialog {
         this.granOptions.forEach(opt=>{
             const btn=this.e("button","dp-gran-btn") as HTMLButtonElement;
             if(opt===this.granSelected) btn.classList.add("active");
-            btn.textContent=opt;
+            btn.textContent=this.granLabelsText[opt as Gran]??opt;
             btn.addEventListener("click",()=>this.selectGran(opt));
             bar.append(btn);
         });

@@ -8,7 +8,7 @@ import { FormattingSettingsService } from "powerbi-visuals-utils-formattingmodel
 import { VisualFormattingSettingsModel } from "./settings";
 import { attachResizer } from "./resize";
 import {
-    Gran, Lang, normalizeGran, GRAN_SING, I18N, SHORTCUTS,
+    Gran, Lang, normalizeGran, GRAN_SING, GRAN_LETTER, I18N, SHORTCUTS,
     d0, dMs, same, fmt, resolveEffectiveGran, calRange, shortcutRange, parseDate, isoWeekNumber
 } from "./shared";
 
@@ -86,6 +86,13 @@ export class Visual implements IVisual {
     private calContainer: HTMLElement|null = null;
     private shortcutsEl!: HTMLElement;
     private calAreaEl!:   HTMLElement; // wraps nav header + grid; rebuilt whole when granularity changes shape
+    // Root element of the "Datas Início/Fim" zone specifically — used to scope that
+    // zone's own selected/unselected/value colors (via applyColors' setZone) to just
+    // this subtree, the same way granBarEl/shortcutsEl/calAreaEl/autoGranRowInline
+    // scope theirs. In vertical mode this is the dedicated full-width "di" strip; in
+    // horizontal mode there's no separate strip (the two date boxes sit directly in
+    // the side column), so buildHorizontalUI wraps them in one for this purpose only.
+    private datesWrapEl: HTMLElement|null = null;
     private calDaysEl!:   HTMLElement;
     private mSel!:        HTMLSelectElement;
     private ySel!:        HTMLSelectElement;
@@ -166,6 +173,21 @@ export class Visual implements IVisual {
 
     private t(){return I18N[this.lang];}
 
+    // Letter shown on a granularity-bar button for a given Gran code: the free-text
+    // override from "Texto da Granularidade" if the report author set one, otherwise
+    // the language-appropriate default from GRAN_LETTER (was always the raw English
+    // Gran code itself before this existed, regardless of report language).
+    private granLabel(g:Gran):string{
+        const gl=this.fmtSettings?.granularityOptions;
+        const override=(gl?({D:gl.granLabelD,W:gl.granLabelW,M:gl.granLabelM,Q:gl.granLabelQ,S:gl.granLabelS,Y:gl.granLabelY}[g].value):"")?.trim();
+        return override || GRAN_LETTER[this.lang][g];
+    }
+    // Pre-resolved map for the full Gran set, handed to the pop-up dialog (a separate
+    // DOM/bundle instance) so it doesn't need its own copy of the override+fallback logic.
+    private granLabelsResolved():Record<Gran,string>{
+        return {D:this.granLabel("D"),W:this.granLabel("W"),M:this.granLabel("M"),Q:this.granLabel("Q"),S:this.granLabel("S"),Y:this.granLabel("Y")};
+    }
+
     private buildShell(){
         this.root.replaceChildren();
         this.wrap=this.e("div","qahs-dp-root");
@@ -182,51 +204,112 @@ export class Visual implements IVisual {
         if(palette?.isHighContrast){
             const fg=palette.foreground.value, bg=palette.background.value, sel=palette.foregroundSelected.value;
             target.style.setProperty("--dp-bg",          bg);
-            target.style.setProperty("--dp-panel",       bg);
+            target.style.setProperty("--dp-zone-gran-bg",      bg);
+            target.style.setProperty("--dp-zone-gran-box-bg",  bg);
+            target.style.setProperty("--dp-zone-dates-bg",     bg);
+            target.style.setProperty("--dp-zone-dates-box-bg", bg);
+            target.style.setProperty("--dp-zone-shortcuts-bg", bg);
+            target.style.setProperty("--dp-zone-shortcuts-box-bg", bg);
+            target.style.setProperty("--dp-zone-cal-bg",       bg);
+            target.style.setProperty("--dp-zone-control-bg",   bg);
             target.style.setProperty("--dp-accent",      sel);
             target.style.setProperty("--dp-title",       fg);
             target.style.setProperty("--dp-value",       fg);
             target.style.setProperty("--dp-accent-text", bg);
             target.style.setProperty("--dp-border",       fg);
             target.style.setProperty("--dp-border-width", "1px");
+            // Clear any per-zone color overrides left on the zone elements themselves
+            // (see setZone below) from a previous normal-mode render — those are more
+            // specific than the ones just set on `target` and would otherwise keep
+            // winning the cascade, defeating high-contrast mode in whichever zones had
+            // a custom color configured.
+            [this.granBarEl,this.datesWrapEl,this.shortcutsEl,this.calAreaEl,this.autoGranRowInline].forEach(el=>{
+                if(!el) return;
+                el.style.removeProperty("--dp-accent"); el.style.removeProperty("--dp-accent-text");
+                el.style.removeProperty("--dp-title");  el.style.removeProperty("--dp-value");
+            });
             return;
         }
-        const c=this.fmtSettings?.dataColors;
-        if(!c) return;
+        const g=this.fmtSettings?.globalStyle;
+        if(!g) return;
         // These are labelled "Transparência" (transparency), so the value itself has to
         // mean "% transparent" — 100 fully see-through, 0 fully solid — not "% opaque" the
         // way the underlying color-mix() call wants it, hence the 100-minus below.
-        const bgOp = 100-Math.max(0,Math.min(100,c.backgroundOpacity.value??0));
-        const panelOp = 100-Math.max(0,Math.min(100,c.panelOpacity.value??0));
-        target.style.setProperty("--dp-bg",          `color-mix(in srgb, ${c.backgroundColor.value.value} ${bgOp}%, transparent)`);
-        target.style.setProperty("--dp-panel",       `color-mix(in srgb, ${c.panelColor.value.value} ${panelOp}%, transparent)`);
+        const op=(v:number|undefined,def:number)=>100-Math.max(0,Math.min(100,v??def));
+        target.style.setProperty("--dp-bg", `color-mix(in srgb, ${g.backgroundColor.value.value} ${op(g.backgroundOpacity.value,0)}%, transparent)`);
         // This is specifically the widget's OWN background while collapsed (hover mode,
-        // not hovering) — granularity and Início/Fim keep their normal opaque boxes either
-        // way (painted on top of it), so the only area this actually shows through is the
-        // blank space left behind by the hidden shortcuts+calendar+footer. On hover it
-        // reverts to the plain --dp-bg (see .dp-hover-mode.dp-hover-active in the CSS) —
-        // fully matching the normal "fundo principal" look, not a separate style of its own.
-        const hoverOp = 100-Math.max(0,Math.min(100,c.hoverRevealOpacity.value??0));
-        target.style.setProperty("--dp-hover-reveal-bg", `color-mix(in srgb, ${c.backgroundColor.value.value} ${hoverOp}%, transparent)`);
-        target.style.setProperty("--dp-accent",      c.accentColor.value.value);
-        target.style.setProperty("--dp-title",       c.titleColor.value.value);
-        target.style.setProperty("--dp-value",       c.valueColor.value.value);
-        target.style.setProperty("--dp-accent-text", c.accentTextColor.value.value);
-        // Four independent zones now (granularity bar / shortcuts / calendar / control
-        // panel), each with its own real font-family and font-size — no more global zoom.
-        // pt→px: 1pt = 4/3px, the standard CSS conversion factor.
-        target.style.setProperty("--dp-font-family-gran",      c.fontFamilyGran.value);
-        target.style.setProperty("--dp-font-size-gran",        `${(c.fontSizeGran.value||7)*4/3}px`);
-        target.style.setProperty("--dp-font-family-shortcuts", c.fontFamilyShortcuts.value);
-        target.style.setProperty("--dp-font-size-shortcuts",   `${(c.fontSizeShortcuts.value||9)*4/3}px`);
-        target.style.setProperty("--dp-font-family-content",   c.fontFamilyContent.value);
-        target.style.setProperty("--dp-font-size-content",     `${(c.fontSizeContent.value||9)*4/3}px`);
-        target.style.setProperty("--dp-font-family-side",      c.fontFamilySide.value);
-        target.style.setProperty("--dp-font-size-side",        `${(c.fontSizeSide.value||9)*4/3}px`);
-        target.style.setProperty("--dp-border",       c.borderColor.value.value);
-        target.style.setProperty("--dp-border-width", `${c.borderWidth.value}px`);
-        target.style.setProperty("--dp-resizer-color",     c.resizerColor.value.value);
-        target.style.setProperty("--dp-resizer-thickness", `${c.resizerThickness.value||1}px`);
+        // not hovering) — granularity and Início/Fim keep their normal, independently-set
+        // zone boxes either way (painted on top of it), so the only area this actually
+        // shows through is the blank space left behind by the hidden shortcuts+calendar+
+        // control-panel zones. On hover it reverts to the plain --dp-bg (see
+        // .dp-hover-mode.dp-hover-active in the CSS).
+        target.style.setProperty("--dp-hover-reveal-bg", `color-mix(in srgb, ${g.backgroundColor.value.value} ${op(g.hoverRevealOpacity.value,0)}%, transparent)`);
+        // One shared typeface for the whole widget — font SIZE still varies per zone
+        // (below), but mixing typefaces zone-to-zone was never wanted and just made the
+        // format pane harder to reason about.
+        target.style.setProperty("--dp-font-family", g.fontFamily.value||"Segoe UI");
+        // Selected/unselected/value colors are now per-zone (see setZone below) — these
+        // four are just the fallback for anything NOT inside one of the 5 zone elements
+        // (e.g. the footer Apply/Cancel buttons), so every zone's own setting always
+        // wins there via the normal CSS cascade (more specific element wins).
+        target.style.setProperty("--dp-accent",      "#2d6bc4");
+        target.style.setProperty("--dp-title",       "#9ab0cc");
+        target.style.setProperty("--dp-value",       "#ffffff");
+        target.style.setProperty("--dp-accent-text", "#ffffff");
+        target.style.setProperty("--dp-border",       g.borderColor.value.value);
+        target.style.setProperty("--dp-border-width", `${g.borderWidth.value}px`);
+        target.style.setProperty("--dp-resizer-color",     g.resizerColor.value.value);
+        target.style.setProperty("--dp-resizer-thickness", `${g.resizerThickness.value||1}px`);
+
+        // 5 fully independent zones (granularity / Início-Fim / atalhos / calendário /
+        // painel de controlo), each with its own background, corner radius ("forma"),
+        // box size (like the Chiclet Slicer's tile size) and font size. Three zones
+        // (gran/dates/shortcuts) ALSO carry a second, independent "box" background —
+        // the fix for the bug where hiding a zone's outer shape also erased the
+        // background of every individual button/field inside it, because both used to
+        // be the same CSS variable. Falls back to the same literal defaults the
+        // settings themselves use when the card hasn't been created yet.
+        const z=this.fmtSettings?.zonesCard;
+        // zoneEl: the zone's own root DOM element (granBarEl, datesWrapEl, shortcutsEl,
+        // calAreaEl, autoGranRowInline) — the 4 selected/unselected/value colors are set
+        // on THAT element, not `target`, so they only cascade to that zone's own
+        // descendants (plain CSS custom-property scoping — every selector in visual.less/
+        // dialog.less already just reads var(--dp-accent) etc. unchanged, no renaming
+        // needed). The bg/radius/boxsize/fontsize vars stay on `target` since their CSS
+        // variable NAMES are already zone-specific (--dp-zone-gran-bg etc.), so scoping
+        // doesn't matter for those.
+        const setZone=(key:string, defs:{color:string,opacity:number,radius:number,fontSize:number,boxSize:number,box?:{color:string,opacity:number}}, zoneEl?:HTMLElement|null)=>{
+            const zone=z?(z as any)[key]?.slices:undefined;
+            const color=zone?.color.value.value??defs.color;
+            const opacity=zone?.opacity.value??defs.opacity;
+            const radius=zone?.radius.value??defs.radius;
+            const boxSize=zone?.boxSize.value??defs.boxSize;
+            const fontSize=zone?.fontSize.value??defs.fontSize;
+            target.style.setProperty(`--dp-zone-${key}-bg`,     `color-mix(in srgb, ${color} ${op(opacity,defs.opacity)}%, transparent)`);
+            target.style.setProperty(`--dp-zone-${key}-radius`, `${radius}px`);
+            target.style.setProperty(`--dp-zone-${key}-boxsize`,`${boxSize}px`);
+            target.style.setProperty(`--dp-font-size-${key}`,   `${(fontSize||defs.fontSize)*4/3}px`);
+            if(defs.box){
+                const boxColor=zone?.boxColor?.value.value??defs.box.color;
+                const boxOpacity=zone?.boxOpacity?.value??defs.box.opacity;
+                target.style.setProperty(`--dp-zone-${key}-box-bg`, `color-mix(in srgb, ${boxColor} ${op(boxOpacity,defs.box.opacity)}%, transparent)`);
+            }
+            if(zoneEl){
+                const selColor=zone?.selectedColor?.value.value??"#2d6bc4";
+                const selTextColor=zone?.selectedTextColor?.value.value??"#ffffff";
+                const unselColor=zone?.unselectedColor?.value.value??"#9ab0cc";
+                const valColor=zone?.valueColor?.value.value??"#ffffff";
+                zoneEl.style.setProperty("--dp-accent",      selColor);
+                zoneEl.style.setProperty("--dp-accent-text", selTextColor);
+                zoneEl.style.setProperty("--dp-title",       unselColor);
+                zoneEl.style.setProperty("--dp-value",       valColor);
+            }
+        };
+        setZone("gran",       {color:"#16243f",opacity:0,  radius:5,fontSize:7,boxSize:5, box:{color:"#16243f",opacity:100}}, this.granBarEl);
+        setZone("dates",      {color:"#16243f",opacity:100,radius:5,fontSize:9,boxSize:3, box:{color:"#16243f",opacity:40}}, this.datesWrapEl);
+        setZone("shortcuts",  {color:"#16243f",opacity:65, radius:4,fontSize:9,boxSize:8, box:{color:"#16243f",opacity:65}}, this.shortcutsEl);
+        setZone("cal",        {color:"#16243f",opacity:100,radius:6,fontSize:9,boxSize:24}, this.calAreaEl);
+        setZone("control",    {color:"#16243f",opacity:0,  radius:5,fontSize:9,boxSize:5}, this.autoGranRowInline);
     }
 
     // ── CLOSED BAR ───────────────────────────────────────────────────────────
@@ -300,7 +383,15 @@ export class Visual implements IVisual {
     private openNativeDialog(){
         if(this.dialogOpen) return;
         this.dialogOpen=true;
-        const c=this.fmtSettings?.dataColors;
+        const g=this.fmtSettings?.globalStyle;
+        const z=this.fmtSettings?.zonesCard;
+        const zv=(key:string,slice:"color"|"opacity"|"radius"|"fontSize"|"boxSize"|"boxColor"|"boxOpacity"|"selectedColor"|"selectedTextColor"|"unselectedColor"|"valueColor",def:any)=>{
+            const zone=z?(z as any)[key]?.slices:undefined;
+            const s=zone?zone[slice]:undefined;
+            if(!s) return def;
+            const isColorPicker=slice==="color"||slice==="boxColor"||slice==="selectedColor"||slice==="selectedTextColor"||slice==="unselectedColor"||slice==="valueColor";
+            return isColorPicker?(s.value.value??def):(s.value??def);
+        };
         const go=this.fmtSettings?.granularityOptions;
         const granVisibleForDialog:Record<Gran,boolean>={D:false,W:false,M:false,Q:false,S:false,Y:false};
         this.granOptions.forEach(g=>granVisibleForDialog[g]=true);
@@ -323,27 +414,44 @@ export class Visual implements IVisual {
                 ? {W:go.granWThreshold.value,M:go.granMThreshold.value,Q:go.granQThreshold.value,S:go.granSThreshold.value,Y:go.granYThreshold.value}
                 : {W:2,M:2,Q:2,S:2,Y:2},
             lockResizers: this.fmtSettings?.displayMode?.lockResizers.value ?? false,
+            granLabelsText: this.granLabelsResolved(),
             colors:{
-                bg:c?.backgroundColor.value.value||"#1e3055",
-                bgOpacity:c?.backgroundOpacity.value??0,
-                panel:c?.panelColor.value.value||"#16243f",
-                panelOpacity:c?.panelOpacity.value??0,
-                accent:c?.accentColor.value.value||"#2d6bc4",
-                title:c?.titleColor.value.value||"#9ab0cc",
-                value:c?.valueColor.value.value||"#ffffff",
-                accentText:c?.accentTextColor.value.value||"#ffffff",
-                borderColor:c?.borderColor.value.value||"#2d4470",
-                borderWidth:c?.borderWidth.value??1,
-                resizerColor:c?.resizerColor.value.value||"#2d4470",
-                resizerThickness:c?.resizerThickness.value??1,
-                fontFamilyGran:c?.fontFamilyGran.value??"Segoe UI",
-                fontSizeGran:c?.fontSizeGran.value??7,
-                fontFamilyShortcuts:c?.fontFamilyShortcuts.value??"Segoe UI",
-                fontSizeShortcuts:c?.fontSizeShortcuts.value??9,
-                fontFamilyContent:c?.fontFamilyContent.value??"Segoe UI",
-                fontSizeContent:c?.fontSizeContent.value??9,
-                fontFamilySide:c?.fontFamilySide.value??"Segoe UI",
-                fontSizeSide:c?.fontSizeSide.value??9
+                bg:g?.backgroundColor.value.value||"#1e3055",
+                bgOpacity:g?.backgroundOpacity.value??0,
+                hoverRevealOpacity:g?.hoverRevealOpacity.value??0,
+                fontFamily:g?.fontFamily.value||"Segoe UI",
+                // Selected/unselected/value colors are per-zone now (see zone*Selected*/
+                // zone*Unselected*/zone*Value* below) — these three plain ones remain only
+                // as the dialog's own generic fallback for anything outside all 5 zones
+                // (e.g. its Apply/Cancel buttons), mirroring applyColors() in visual.ts.
+                accent:"#2d6bc4", title:"#9ab0cc", value:"#ffffff", accentText:"#ffffff",
+                borderColor:g?.borderColor.value.value||"#2d4470",
+                borderWidth:g?.borderWidth.value??1,
+                resizerColor:g?.resizerColor.value.value||"#2d4470",
+                resizerThickness:g?.resizerThickness.value??1,
+                zoneGranColor:zv("gran","color","#16243f"), zoneGranOpacity:zv("gran","opacity",0), zoneGranRadius:zv("gran","radius",5),
+                zoneGranBoxSize:zv("gran","boxSize",5), zoneGranFontSize:zv("gran","fontSize",7),
+                zoneGranBoxColor:zv("gran","boxColor","#16243f"), zoneGranBoxOpacity:zv("gran","boxOpacity",100),
+                zoneGranSelectedColor:zv("gran","selectedColor","#2d6bc4"), zoneGranSelectedTextColor:zv("gran","selectedTextColor","#ffffff"),
+                zoneGranUnselectedColor:zv("gran","unselectedColor","#9ab0cc"), zoneGranValueColor:zv("gran","valueColor","#ffffff"),
+                zoneDatesColor:zv("dates","color","#16243f"), zoneDatesOpacity:zv("dates","opacity",100), zoneDatesRadius:zv("dates","radius",5),
+                zoneDatesBoxSize:zv("dates","boxSize",3), zoneDatesFontSize:zv("dates","fontSize",9),
+                zoneDatesSelectedColor:zv("dates","selectedColor","#2d6bc4"), zoneDatesSelectedTextColor:zv("dates","selectedTextColor","#ffffff"),
+                zoneDatesUnselectedColor:zv("dates","unselectedColor","#9ab0cc"), zoneDatesValueColor:zv("dates","valueColor","#ffffff"),
+                zoneDatesBoxColor:zv("dates","boxColor","#16243f"), zoneDatesBoxOpacity:zv("dates","boxOpacity",40),
+                zoneShortcutsColor:zv("shortcuts","color","#16243f"), zoneShortcutsOpacity:zv("shortcuts","opacity",65), zoneShortcutsRadius:zv("shortcuts","radius",4),
+                zoneShortcutsBoxSize:zv("shortcuts","boxSize",8), zoneShortcutsFontSize:zv("shortcuts","fontSize",9),
+                zoneShortcutsBoxColor:zv("shortcuts","boxColor","#16243f"), zoneShortcutsBoxOpacity:zv("shortcuts","boxOpacity",65),
+                zoneShortcutsSelectedColor:zv("shortcuts","selectedColor","#2d6bc4"), zoneShortcutsSelectedTextColor:zv("shortcuts","selectedTextColor","#ffffff"),
+                zoneShortcutsUnselectedColor:zv("shortcuts","unselectedColor","#9ab0cc"), zoneShortcutsValueColor:zv("shortcuts","valueColor","#ffffff"),
+                zoneCalColor:zv("cal","color","#16243f"), zoneCalOpacity:zv("cal","opacity",100), zoneCalRadius:zv("cal","radius",6),
+                zoneCalBoxSize:zv("cal","boxSize",24), zoneCalFontSize:zv("cal","fontSize",9),
+                zoneCalSelectedColor:zv("cal","selectedColor","#2d6bc4"), zoneCalSelectedTextColor:zv("cal","selectedTextColor","#ffffff"),
+                zoneCalUnselectedColor:zv("cal","unselectedColor","#9ab0cc"), zoneCalValueColor:zv("cal","valueColor","#ffffff"),
+                zoneControlColor:zv("control","color","#16243f"), zoneControlOpacity:zv("control","opacity",0), zoneControlRadius:zv("control","radius",5),
+                zoneControlBoxSize:zv("control","boxSize",5), zoneControlFontSize:zv("control","fontSize",9),
+                zoneControlSelectedColor:zv("control","selectedColor","#2d6bc4"), zoneControlSelectedTextColor:zv("control","selectedTextColor","#ffffff"),
+                zoneControlUnselectedColor:zv("control","unselectedColor","#9ab0cc"), zoneControlValueColor:zv("control","valueColor","#ffffff")
             }
         };
         // RelativeToVisual (positioning the dialog near the visual) can't be auto-corrected
@@ -448,7 +556,13 @@ export class Visual implements IVisual {
         const btnCancel=this.e("button","dp-pop-btn cancel") as HTMLButtonElement; btnCancel.textContent=this.t().cancel; btnCancel.addEventListener("click",()=>this.cancelInlineDraft());
         const btnApply=this.e("button","dp-pop-btn apply") as HTMLButtonElement; btnApply.textContent=this.t().apply; btnApply.addEventListener("click",()=>this.submitFromInline());
         btnRow.append(btnCancel,btnApply);
-        colSide.append(ws,we);
+        // Thin wrapper purely so the Dates zone's own colors (set in applyColors) can be
+        // scoped to just these two boxes — the horizontal layout has no other natural
+        // container for them (they sit loose in colSide alongside auto/manual + footer).
+        const datesWrap=this.e("div","dp-horiz-dates-wrap");
+        datesWrap.append(ws,we);
+        this.datesWrapEl=datesWrap;
+        colSide.append(datesWrap);
         const autoRowV=this.buildAutoGranRow(true);
         if(autoRowV) colSide.append(autoRowV);
         colSide.append(this.footerInfo,btnRow);
@@ -508,6 +622,7 @@ export class Visual implements IVisual {
         this.inE.addEventListener("focus",()=>this.setEditingField("end"));
         we.append(le,this.inE); this.inputWrapEnd=we;
         di.append(ws,we);
+        this.datesWrapEl=di;
         // Start/End is now a full-width strip of its own — a root-level sibling of `body`,
         // not nested inside the calendar column — so it gets its own independent resizer
         // and dragging the shortcuts↔calendar divider (which only ever should change
@@ -995,7 +1110,7 @@ export class Visual implements IVisual {
         this.granOptions.forEach(opt=>{
             const btn=this.e("button","dp-gran-btn") as HTMLButtonElement;
             if(opt===this.granSelected) btn.classList.add("active");
-            const badge=this.e("span","dp-gran-badge"); badge.textContent=opt;
+            const badge=this.e("span","dp-gran-badge"); badge.textContent=this.granLabel(opt as Gran);
             btn.append(badge);
             btn.addEventListener("click",()=>this.selectGran(opt));
             bar.append(btn);
@@ -1007,6 +1122,20 @@ export class Visual implements IVisual {
         if(!this.granBarEl) return;
         Array.from(this.granBarEl.children).forEach((el,i)=>{
             el.classList.toggle("active", this.granOptions[i]===this.granSelected);
+        });
+    }
+    // The gran bar's badges are only ever built once (buildGranBar(), at UI construction
+    // time), same as refreshGranBar() above — so editing a letter's custom text in the
+    // "Granularidades Visíveis" card (or changing the report language) never touched the
+    // already-built DOM and the old label just stuck around forever. Called on every
+    // update(), unconditionally, since label text can change independent of granChanged.
+    private refreshGranLabels(){
+        if(!this.granBarEl) return;
+        Array.from(this.granBarEl.children).forEach((el,i)=>{
+            const opt=this.granOptions[i];
+            if(!opt) return;
+            const badge=el.querySelector(".dp-gran-badge");
+            if(badge) badge.textContent=this.granLabel(opt as Gran);
         });
     }
 
@@ -1512,8 +1641,21 @@ export class Visual implements IVisual {
             if(dv.categorical?.values){
                 for(const val of dv.categorical.values){
                     if(val.source.roles?.["langMeasure"]){
-                        const raw=String(val.values[0]||"PT").trim().toUpperCase() as Lang;
-                        if(["PT","EN"].includes(raw)) this.lang=raw;
+                        // A blank/null measure result (e.g. the measure evaluates to BLANK()
+                        // under this page's filter context) must NOT silently fall back to a
+                        // hardcoded "PT" — that was overriding the host-locale-based default
+                        // (set in the constructor from host.locale) with Portuguese on any
+                        // page/filter context where the measure happens to return nothing,
+                        // which is exactly how the same visual/version ended up showing
+                        // "Início/Fim" on one report page and "Start/End" on another: one
+                        // page's filter context made the measure blank, the other didn't.
+                        // When blank, leave this.lang exactly as it already was (host locale,
+                        // or whatever a previous non-blank evaluation last set it to).
+                        const rawVal=val.values[0];
+                        if(rawVal!=null && String(rawVal).trim()!==""){
+                            const raw=String(rawVal).trim().toUpperCase() as Lang;
+                            if(["PT","EN"].includes(raw)) this.lang=raw;
+                        }
                     }
                     if(val.source.roles?.["refDateMeasure"] && val.values[0]!=null){
                         const v=val.values[0];
@@ -1742,6 +1884,7 @@ export class Visual implements IVisual {
             } else {
                 this.applyColors(this.wrap);
                 if(this.calContainer) this.applyColors(this.calContainer);
+                this.refreshGranLabels();
                 // Granularity changed shape (e.g. D→M): rebuild the header+grid so it
                 // switches between the day grid and the month/quarter/semester/year grid.
                 const calAreaVisible=this.currentMode!=="popup";

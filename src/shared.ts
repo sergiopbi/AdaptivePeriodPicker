@@ -32,6 +32,17 @@ export const GRAN_SING: Record<Lang,Record<Gran,string>> = {
     EN:{D:"Daily",W:"Weekly",M:"Monthly",Q:"Quarterly",S:"Semester",Y:"Annual"}
 };
 
+// Short letter/abbreviation shown on the granularity bar's own buttons (D/W/M/Q/S/Y).
+// These were literally the hardcoded English Gran codes before — visible to a PT report
+// even though every other piece of text in the visual translates. PT needs 2-letter
+// "SM" for Semestral since "S" is already taken by Semanal — a real collision, not a
+// typo. The "Texto da Granularidade" formatting card can override any of these with
+// free text per letter; this table is only the fallback when that's left blank.
+export const GRAN_LETTER: Record<Lang,Record<Gran,string>> = {
+    PT:{D:"D",W:"S",M:"M",Q:"T",S:"SM",Y:"A"},
+    EN:{D:"D",W:"W",M:"M",Q:"Q",S:"S",Y:"Y"}
+};
+
 export interface I18nStrings {
     today:string; yesterday:string; thisWeek:string; lastWeek:string; thisMonth:string; lastMonth:string;
     thisQuarter:string; lastQuarter:string; thisSemester:string; lastSemester:string; thisYear:string;

@@ -1,706 +1,976 @@
 {
-    "dataRoles": [
-        {
-            "displayName": "Date Column",
-            "displayNameKey": "Role_DateColumn",
-            "name": "dateColumn",
-            "kind": "Grouping",
-            "description": "DT_DATE[Date_D]"
-        },
-        {
-            "displayName": "Granularity Column (optional)",
-            "displayNameKey": "Role_GranColumn",
-            "name": "granColumn",
-            "kind": "Grouping",
-            "description": "Physical column with granularity codes (D/W/M/Q/S/Y), e.g. AUX_PERIOD[Aux_Period]. Can be an ordinary small disconnected table \u2014 no cartesian join or special shaping needed. When bound, granularity becomes part of the same real, cross-page-synced filter as the date range. When left unbound, the selector still works fully; granularity is just UI-only (no filter sent for it specifically).",
-            "descriptionKey": "Role_GranColumn_Desc"
-        },
-        {
-            "displayName": "Language",
-            "displayNameKey": "Role_Language",
-            "name": "langMeasure",
-            "kind": "Measure",
-            "description": "AUX_LANGUAGE[_SELECTED_LANG]"
-        },
-        {
-            "displayName": "Reference Date (optional)",
-            "displayNameKey": "Role_RefDate",
-            "name": "refDateMeasure",
-            "kind": "Measure",
-            "description": "Optional measure for reference date. Use CALCULATE(MAX(DT_DATE[Date_D]), ALL()) to ensure stable value across pages."
-        }
-    ],
-    "objects": {
-        "general": {
-            "properties": {
-                "filter": {
-                    "type": {
-                        "filter": {}
-                    }
-                },
-                "state": {
-                    "type": {
-                        "text": true
-                    }
-                }
-            }
-        },
-        "dataColors": {
-            "displayName": "Cores e Texto",
-            "displayNameKey": "Card_DataColors",
-            "properties": {
-                "backgroundColor": {
-                    "displayName": "Fundo principal",
-                    "displayNameKey": "Prop_BackgroundColor",
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "backgroundOpacity": {
-                    "displayName": "Transparência do fundo principal (%)",
-                    "displayNameKey": "Prop_BackgroundOpacity",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "panelColor": {
-                    "displayName": "Fundo de caixas / inputs",
-                    "displayNameKey": "Prop_PanelColor",
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "panelOpacity": {
-                    "displayName": "Transparência do fundo de caixas (%)",
-                    "displayNameKey": "Prop_PanelOpacity",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "hoverRevealOpacity": {
-                    "displayName": "Transparência da área expansível (%)",
-                    "displayNameKey": "Prop_HoverRevealOpacity",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "accentColor": {
-                    "displayName": "Cor de destaque",
-                    "displayNameKey": "Prop_AccentColor",
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "titleColor": {
-                    "displayName": "Cor de t\u00edtulos / setas / texto secund\u00e1rio",
-                    "displayNameKey": "Prop_TitleColor",
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "valueColor": {
-                    "displayName": "Cor de valores / texto principal",
-                    "displayNameKey": "Prop_ValueColor",
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "accentTextColor": {
-                    "displayName": "Texto sobre a cor de destaque",
-                    "displayNameKey": "Prop_AccentTextColor",
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "fontFamilyGran": {
-                    "displayName": "Tipo de letra — Granularidade",
-                    "displayNameKey": "Prop_FontFamilyGran",
-                    "type": {
-                        "formatting": {
-                            "fontFamily": true
-                        }
-                    }
-                },
-                "fontSizeGran": {
-                    "displayName": "Tamanho — Granularidade (pt)",
-                    "displayNameKey": "Prop_FontSizeGran",
-                    "type": {
-                        "formatting": {
-                            "fontSize": true
-                        }
-                    }
-                },
-                "fontFamilyShortcuts": {
-                    "displayName": "Tipo de letra — Atalhos",
-                    "displayNameKey": "Prop_FontFamilyShortcuts",
-                    "type": {
-                        "formatting": {
-                            "fontFamily": true
-                        }
-                    }
-                },
-                "fontSizeShortcuts": {
-                    "displayName": "Tamanho — Atalhos (pt)",
-                    "displayNameKey": "Prop_FontSizeShortcuts",
-                    "type": {
-                        "formatting": {
-                            "fontSize": true
-                        }
-                    }
-                },
-                "fontFamilyContent": {
-                    "displayName": "Tipo de letra — Calendário",
-                    "displayNameKey": "Prop_FontFamilyContent",
-                    "type": {
-                        "formatting": {
-                            "fontFamily": true
-                        }
-                    }
-                },
-                "fontSizeContent": {
-                    "displayName": "Tamanho — Calendário (pt)",
-                    "displayNameKey": "Prop_FontSizeContent",
-                    "type": {
-                        "formatting": {
-                            "fontSize": true
-                        }
-                    }
-                },
-                "fontFamilySide": {
-                    "displayName": "Tipo de letra — Painel de Controlo",
-                    "displayNameKey": "Prop_FontFamilySide",
-                    "type": {
-                        "formatting": {
-                            "fontFamily": true
-                        }
-                    }
-                },
-                "fontSizeSide": {
-                    "displayName": "Tamanho — Painel de Controlo (pt)",
-                    "displayNameKey": "Prop_FontSizeSide",
-                    "type": {
-                        "formatting": {
-                            "fontSize": true
-                        }
-                    }
-                },
-                "borderColor": {
-                    "displayName": "Cor do rebordo",
-                    "displayNameKey": "Prop_BorderColor",
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "borderWidth": {
-                    "displayName": "Espessura do rebordo (px)",
-                    "displayNameKey": "Prop_BorderWidth",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "resizerColor": {
-                    "displayName": "Cor dos separadores de arrasto",
-                    "displayNameKey": "Prop_ResizerColor",
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "resizerThickness": {
-                    "displayName": "Espessura dos separadores de arrasto (px)",
-                    "displayNameKey": "Prop_ResizerThickness",
-                    "type": {
-                        "numeric": true
-                    }
-                }
-            }
-        },
-        "displayMode": {
-            "displayName": "Modo de Exibi\u00e7\u00e3o",
-            "displayNameKey": "Card_DisplayMode",
-            "properties": {
-                "layoutMode": {
-                    "displayName": "Modo de exibi\u00e7\u00e3o",
-                    "displayNameKey": "Prop_LayoutMode",
-                    "type": {
-                        "enumeration": [
-                            {
-                                "displayName": "Pop-up",
-                                "displayNameKey": "Enum_Popup",
-                                "value": "popup"
-                            },
-                            {
-                                "displayName": "Inline Vertical",
-                                "displayNameKey": "Enum_InlineVertical",
-                                "value": "inline-vertical"
-                            },
-                            {
-                                "displayName": "Inline Horizontal",
-                                "displayNameKey": "Enum_InlineHorizontal",
-                                "value": "inline-horizontal"
-                            }
-                        ]
-                    }
-                },
-                "applyMode": {
-                    "displayName": "Modo de aplica\u00e7\u00e3o",
-                    "displayNameKey": "Prop_ApplyMode",
-                    "type": {
-                        "enumeration": [
-                            {
-                                "value": "immediate",
-                                "displayName": "Imediato",
-                                "displayNameKey": "Enum_Immediate"
-                            },
-                            {
-                                "value": "confirm",
-                                "displayName": "Confirmar",
-                                "displayNameKey": "Enum_Confirm"
-                            }
-                        ]
-                    }
-                },
-                "hoverExpand": {
-                    "displayName": "Mostrar apenas ao passar o rato",
-                    "displayNameKey": "Prop_HoverExpand",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "lockResizers": {
-                    "displayName": "Bloquear tamanhos (separadores de arrasto)",
-                    "displayNameKey": "Prop_LockResizers",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "popupWidth": {
-                    "displayName": "Largura do pop-up (px)",
-                    "displayNameKey": "Prop_PopupWidth",
-                    "description": "S\u00f3 se aplica no modo Pop-up. Reduz este valor se o pop-up estiver a ultrapassar a margem direita do ecr\u00e3 e a criar scroll horizontal.",
-                    "descriptionKey": "Prop_PopupWidth_Desc",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "popupHeight": {
-                    "displayName": "Altura do pop-up (px)",
-                    "displayNameKey": "Prop_PopupHeight",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "popupHorizontalAnchor": {
-                    "displayName": "Lado de abertura do pop-up",
-                    "displayNameKey": "Prop_PopupHorizontalAnchor",
-                    "type": {
-                        "enumeration": [
-                            {
-                                "displayName": "Direita (a partir do visual)",
-                                "displayNameKey": "Enum_AnchorRight",
-                                "value": "right"
-                            },
-                            {
-                                "displayName": "Esquerda (a partir do visual)",
-                                "displayNameKey": "Enum_AnchorLeft",
-                                "value": "left"
-                            }
-                        ]
-                    }
-                }
-            }
-        },
-        "defaultPeriod": {
-            "displayName": "Per\u00edodo Predefinido",
-            "displayNameKey": "Card_DefaultPeriod",
-            "properties": {
-                "defaultType": {
-                    "displayName": "Per\u00edodo predefinido",
-                    "displayNameKey": "Prop_DefaultType",
-                    "type": {
-                        "enumeration": [
-                            {
-                                "value": "today",
-                                "displayName": "today",
-                                "displayNameKey": "Enum_Today"
-                            },
-                            {
-                                "value": "yesterday",
-                                "displayName": "yesterday",
-                                "displayNameKey": "Enum_Yesterday"
-                            },
-                            {
-                                "value": "thisWeek",
-                                "displayName": "thisWeek",
-                                "displayNameKey": "Enum_ThisWeek"
-                            },
-                            {
-                                "value": "lastWeek",
-                                "displayName": "lastWeek",
-                                "displayNameKey": "Enum_LastWeek"
-                            },
-                            {
-                                "value": "thisMonth",
-                                "displayName": "thisMonth",
-                                "displayNameKey": "Enum_ThisMonth"
-                            },
-                            {
-                                "value": "mtd",
-                                "displayName": "mtd",
-                                "displayNameKey": "Enum_Mtd"
-                            },
-                            {
-                                "value": "qtd",
-                                "displayName": "qtd",
-                                "displayNameKey": "Enum_Qtd"
-                            },
-                            {
-                                "value": "ytd",
-                                "displayName": "ytd",
-                                "displayNameKey": "Enum_Ytd"
-                            },
-                            {
-                                "value": "thisQuarter",
-                                "displayName": "thisQuarter",
-                                "displayNameKey": "Enum_ThisQuarter"
-                            },
-                            {
-                                "value": "thisSemester",
-                                "displayName": "thisSemester",
-                                "displayNameKey": "Enum_ThisSemester"
-                            },
-                            {
-                                "value": "thisYear",
-                                "displayName": "thisYear",
-                                "displayNameKey": "Enum_ThisYear"
-                            },
-                            {
-                                "value": "dynamic",
-                                "displayName": "dynamic",
-                                "displayNameKey": "Enum_Dynamic"
-                            }
-                        ]
-                    }
-                }
-            }
-        },
-        "shortcuts": {
-            "displayName": "Atalhos Vis\u00edveis",
-            "displayNameKey": "Card_Shortcuts",
-            "properties": {
-                "scShowAll": {
-                    "displayName": "scShowAll",
-                    "displayNameKey": "Prop_ScShowAll",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scToday": {
-                    "displayName": "scToday",
-                    "displayNameKey": "Prop_ScToday",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scYesterday": {
-                    "displayName": "scYesterday",
-                    "displayNameKey": "Prop_ScYesterday",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scThisWeek": {
-                    "displayName": "scThisWeek",
-                    "displayNameKey": "Prop_ScThisWeek",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scLastWeek": {
-                    "displayName": "scLastWeek",
-                    "displayNameKey": "Prop_ScLastWeek",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scThisMonth": {
-                    "displayName": "scThisMonth",
-                    "displayNameKey": "Prop_ScThisMonth",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scLastMonth": {
-                    "displayName": "scLastMonth",
-                    "displayNameKey": "Prop_ScLastMonth",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scMtd": {
-                    "displayName": "scMtd",
-                    "displayNameKey": "Prop_ScMtd",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scQtd": {
-                    "displayName": "scQtd",
-                    "displayNameKey": "Prop_ScQtd",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scYtd": {
-                    "displayName": "scYtd",
-                    "displayNameKey": "Prop_ScYtd",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scThisQuarter": {
-                    "displayName": "scThisQuarter",
-                    "displayNameKey": "Prop_ScThisQuarter",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scLastQuarter": {
-                    "displayName": "scLastQuarter",
-                    "displayNameKey": "Prop_ScLastQuarter",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scThisSemester": {
-                    "displayName": "scThisSemester",
-                    "displayNameKey": "Prop_ScThisSemester",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scLastSemester": {
-                    "displayName": "scLastSemester",
-                    "displayNameKey": "Prop_ScLastSemester",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scThisYear": {
-                    "displayName": "scThisYear",
-                    "displayNameKey": "Prop_ScThisYear",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "scDynamic": {
-                    "displayName": "scDynamic",
-                    "displayNameKey": "Prop_ScDynamic",
-                    "type": {
-                        "bool": true
-                    }
-                }
-            }
-        },
-        "granularityOptions": {
-            "displayName": "Granularidades Vis\u00edveis",
-            "displayNameKey": "Card_GranularityOptions",
-            "properties": {
-                "autoGranularity": {
-                    "displayName": "Granularidade autom\u00e1tica",
-                    "displayNameKey": "Prop_AutoGranularity",
-                    "description": "Ligado: a granularidade escolhida acima \u00e9 s\u00f3 uma sugest\u00e3o \u2014 se o intervalo selecionado tiver poucos pontos nesse n\u00edvel (ou esse n\u00edvel estiver desligado), desce automaticamente para o pr\u00f3ximo n\u00edvel dispon\u00edvel. A grelha mostrada nunca muda sozinha; s\u00f3 o filtro efetivo enviado aos outros visuais \u00e9 que pode ser diferente do n\u00edvel clicado. Desligado: for\u00e7a sempre o n\u00edvel escolhido, sem downgrade nenhum.",
-                    "descriptionKey": "Prop_AutoGranularity_Desc",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "showAutoGranToggle": {
-                    "displayName": "Mostrar interruptor Autom\u00e1tico/Manual ao utilizador",
-                    "displayNameKey": "Prop_ShowAutoGranToggle",
-                    "description": "Mostra, dentro do pr\u00f3prio seletor, um interruptor que permite a quem v\u00ea o relat\u00f3rio trocar entre granularidade autom\u00e1tica e manual. A escolha n\u00e3o fica gravada \u2014 reinicia sempre no valor de \"Granularidade autom\u00e1tica\" acima ao reabrir o relat\u00f3rio.",
-                    "descriptionKey": "Prop_ShowAutoGranToggle_Desc",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "granD": {
-                    "displayName": "Di\u00e1rio (D)",
-                    "displayNameKey": "Prop_GranD",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "granW": {
-                    "displayName": "Semanal (W)",
-                    "displayNameKey": "Prop_GranW",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "granWThreshold": {
-                    "displayName": "W \u2014 m\u00ednimo de semanas",
-                    "displayNameKey": "Prop_GranWThreshold",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "granM": {
-                    "displayName": "Mensal (M)",
-                    "displayNameKey": "Prop_GranM",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "granMThreshold": {
-                    "displayName": "M \u2014 m\u00ednimo de meses",
-                    "displayNameKey": "Prop_GranMThreshold",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "granQ": {
-                    "displayName": "Trimestral (Q)",
-                    "displayNameKey": "Prop_GranQ",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "granQThreshold": {
-                    "displayName": "Q \u2014 m\u00ednimo de trimestres",
-                    "displayNameKey": "Prop_GranQThreshold",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "granS": {
-                    "displayName": "Semestral (S)",
-                    "displayNameKey": "Prop_GranS",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "granSThreshold": {
-                    "displayName": "S \u2014 m\u00ednimo de semestres",
-                    "displayNameKey": "Prop_GranSThreshold",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "granY": {
-                    "displayName": "Anual (Y)",
-                    "displayNameKey": "Prop_GranY",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "granYThreshold": {
-                    "displayName": "Y \u2014 m\u00ednimo de anos",
-                    "displayNameKey": "Prop_GranYThreshold",
-                    "type": {
-                        "numeric": true
-                    }
-                }
-            }
-        }
+  "dataRoles": [
+    {
+      "displayName": "Date Column",
+      "displayNameKey": "Role_DateColumn",
+      "name": "dateColumn",
+      "kind": "Grouping",
+      "description": "DT_DATE[Date_D]"
     },
-    "dataViewMappings": [
-        {
-            "conditions": [
-                {
-                    "dateColumn": {
-                        "max": 1
-                    },
-                    "langMeasure": {
-                        "max": 1
-                    },
-                    "refDateMeasure": {
-                        "max": 1
-                    },
-                    "granColumn": {
-                        "max": 1
-                    }
-                }
-            ],
-            "categorical": {
-                "categories": {
-                    "select": [
-                        {
-                            "for": {
-                                "in": "dateColumn"
-                            }
-                        },
-                        {
-                            "for": {
-                                "in": "granColumn"
-                            }
-                        }
-                    ],
-                    "dataReductionAlgorithm": {
-                        "top": {
-                            "count": 30000
-                        }
-                    }
-                },
-                "values": {
-                    "select": [
-                        {
-                            "bind": {
-                                "to": "langMeasure"
-                            }
-                        },
-                        {
-                            "bind": {
-                                "to": "refDateMeasure"
-                            }
-                        }
-                    ]
-                }
-            }
-        }
-    ],
-    "privileges": [],
-    "supportsEmptyDataView": true,
-    "suppressDefaultTitle": true,
-    "supportsSynchronizingFilterState": true,
-    "supportsLandingPage": true,
-    "supportsKeyboardFocus": true,
-    "tooltips": {
-        "supportedTypes": {
-            "default": true,
-            "canvas": true
-        },
-        "supportEnhancedTooltips": true
+    {
+      "displayName": "Granularity Column (optional)",
+      "displayNameKey": "Role_GranColumn",
+      "name": "granColumn",
+      "kind": "Grouping",
+      "description": "Physical column with granularity codes (D/W/M/Q/S/Y), e.g. AUX_PERIOD[Aux_Period]. Can be an ordinary small disconnected table \u2014 no cartesian join or special shaping needed. When bound, granularity becomes part of the same real, cross-page-synced filter as the date range. When left unbound, the selector still works fully; granularity is just UI-only (no filter sent for it specifically).",
+      "descriptionKey": "Role_GranColumn_Desc"
+    },
+    {
+      "displayName": "Language",
+      "displayNameKey": "Role_Language",
+      "name": "langMeasure",
+      "kind": "Measure",
+      "description": "AUX_LANGUAGE[_SELECTED_LANG]"
+    },
+    {
+      "displayName": "Reference Date (optional)",
+      "displayNameKey": "Role_RefDate",
+      "name": "refDateMeasure",
+      "kind": "Measure",
+      "description": "Optional measure for reference date. Use CALCULATE(MAX(DT_DATE[Date_D]), ALL()) to ensure stable value across pages."
     }
+  ],
+  "objects": {
+    "general": {
+      "properties": {
+        "filter": {
+          "type": {
+            "filter": {}
+          }
+        },
+        "state": {
+          "type": {
+            "text": true
+          }
+        }
+      }
+    },
+    "globalStyle": {
+      "properties": {
+        "fontFamily": {
+          "type": {
+            "formatting": {
+              "fontFamily": true
+            }
+          }
+        },
+        "backgroundColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "backgroundOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "hoverRevealOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "borderColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "borderWidth": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "resizerColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "resizerThickness": {
+          "type": {
+            "numeric": true
+          }
+        }
+      }
+    },
+    "zonesCard": {
+      "properties": {
+        "zoneGranColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneGranOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneGranRadius": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneGranBoxSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneGranFontSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneGranBoxColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneGranBoxOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneGranSelectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneGranSelectedTextColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneGranUnselectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneGranValueColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneDatesColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneDatesOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneDatesRadius": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneDatesBoxSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneDatesFontSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneDatesBoxColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneDatesBoxOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneDatesSelectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneDatesSelectedTextColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneDatesUnselectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneDatesValueColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneShortcutsColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneShortcutsOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneShortcutsRadius": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneShortcutsBoxSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneShortcutsFontSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneShortcutsBoxColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneShortcutsBoxOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneShortcutsSelectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneShortcutsSelectedTextColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneShortcutsUnselectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneShortcutsValueColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneCalColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneCalOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneCalRadius": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneCalBoxSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneCalFontSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneCalSelectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneCalSelectedTextColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneCalUnselectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneCalValueColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneControlColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneControlOpacity": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneControlRadius": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneControlBoxSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneControlFontSize": {
+          "type": {
+            "numeric": true
+          }
+        },
+        "zoneControlSelectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneControlSelectedTextColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneControlUnselectedColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "zoneControlValueColor": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "displayMode": {
+      "displayName": "Modo de Exibi\u00e7\u00e3o",
+      "displayNameKey": "Card_DisplayMode",
+      "properties": {
+        "layoutMode": {
+          "displayName": "Modo de exibi\u00e7\u00e3o",
+          "displayNameKey": "Prop_LayoutMode",
+          "type": {
+            "enumeration": [
+              {
+                "displayName": "Pop-up",
+                "displayNameKey": "Enum_Popup",
+                "value": "popup"
+              },
+              {
+                "displayName": "Inline Vertical",
+                "displayNameKey": "Enum_InlineVertical",
+                "value": "inline-vertical"
+              },
+              {
+                "displayName": "Inline Horizontal",
+                "displayNameKey": "Enum_InlineHorizontal",
+                "value": "inline-horizontal"
+              }
+            ]
+          }
+        },
+        "applyMode": {
+          "displayName": "Modo de aplica\u00e7\u00e3o",
+          "displayNameKey": "Prop_ApplyMode",
+          "type": {
+            "enumeration": [
+              {
+                "value": "immediate",
+                "displayName": "Imediato",
+                "displayNameKey": "Enum_Immediate"
+              },
+              {
+                "value": "confirm",
+                "displayName": "Confirmar",
+                "displayNameKey": "Enum_Confirm"
+              }
+            ]
+          }
+        },
+        "hoverExpand": {
+          "displayName": "Mostrar apenas ao passar o rato",
+          "displayNameKey": "Prop_HoverExpand",
+          "type": {
+            "bool": true
+          }
+        },
+        "lockResizers": {
+          "displayName": "Bloquear tamanhos (separadores de arrasto)",
+          "displayNameKey": "Prop_LockResizers",
+          "type": {
+            "bool": true
+          }
+        },
+        "popupWidth": {
+          "displayName": "Largura do pop-up (px)",
+          "displayNameKey": "Prop_PopupWidth",
+          "description": "S\u00f3 se aplica no modo Pop-up. Reduz este valor se o pop-up estiver a ultrapassar a margem direita do ecr\u00e3 e a criar scroll horizontal.",
+          "descriptionKey": "Prop_PopupWidth_Desc",
+          "type": {
+            "numeric": true
+          }
+        },
+        "popupHeight": {
+          "displayName": "Altura do pop-up (px)",
+          "displayNameKey": "Prop_PopupHeight",
+          "type": {
+            "numeric": true
+          }
+        },
+        "popupHorizontalAnchor": {
+          "displayName": "Lado de abertura do pop-up",
+          "displayNameKey": "Prop_PopupHorizontalAnchor",
+          "type": {
+            "enumeration": [
+              {
+                "displayName": "Direita (a partir do visual)",
+                "displayNameKey": "Enum_AnchorRight",
+                "value": "right"
+              },
+              {
+                "displayName": "Esquerda (a partir do visual)",
+                "displayNameKey": "Enum_AnchorLeft",
+                "value": "left"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "defaultPeriod": {
+      "displayName": "Per\u00edodo Predefinido",
+      "displayNameKey": "Card_DefaultPeriod",
+      "properties": {
+        "defaultType": {
+          "displayName": "Per\u00edodo predefinido",
+          "displayNameKey": "Prop_DefaultType",
+          "type": {
+            "enumeration": [
+              {
+                "value": "today",
+                "displayName": "today",
+                "displayNameKey": "Enum_Today"
+              },
+              {
+                "value": "yesterday",
+                "displayName": "yesterday",
+                "displayNameKey": "Enum_Yesterday"
+              },
+              {
+                "value": "thisWeek",
+                "displayName": "thisWeek",
+                "displayNameKey": "Enum_ThisWeek"
+              },
+              {
+                "value": "lastWeek",
+                "displayName": "lastWeek",
+                "displayNameKey": "Enum_LastWeek"
+              },
+              {
+                "value": "thisMonth",
+                "displayName": "thisMonth",
+                "displayNameKey": "Enum_ThisMonth"
+              },
+              {
+                "value": "mtd",
+                "displayName": "mtd",
+                "displayNameKey": "Enum_Mtd"
+              },
+              {
+                "value": "qtd",
+                "displayName": "qtd",
+                "displayNameKey": "Enum_Qtd"
+              },
+              {
+                "value": "ytd",
+                "displayName": "ytd",
+                "displayNameKey": "Enum_Ytd"
+              },
+              {
+                "value": "thisQuarter",
+                "displayName": "thisQuarter",
+                "displayNameKey": "Enum_ThisQuarter"
+              },
+              {
+                "value": "thisSemester",
+                "displayName": "thisSemester",
+                "displayNameKey": "Enum_ThisSemester"
+              },
+              {
+                "value": "thisYear",
+                "displayName": "thisYear",
+                "displayNameKey": "Enum_ThisYear"
+              },
+              {
+                "value": "dynamic",
+                "displayName": "dynamic",
+                "displayNameKey": "Enum_Dynamic"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "shortcuts": {
+      "displayName": "Atalhos Vis\u00edveis",
+      "displayNameKey": "Card_Shortcuts",
+      "properties": {
+        "scShowAll": {
+          "displayName": "scShowAll",
+          "displayNameKey": "Prop_ScShowAll",
+          "type": {
+            "bool": true
+          }
+        },
+        "scToday": {
+          "displayName": "scToday",
+          "displayNameKey": "Prop_ScToday",
+          "type": {
+            "bool": true
+          }
+        },
+        "scYesterday": {
+          "displayName": "scYesterday",
+          "displayNameKey": "Prop_ScYesterday",
+          "type": {
+            "bool": true
+          }
+        },
+        "scThisWeek": {
+          "displayName": "scThisWeek",
+          "displayNameKey": "Prop_ScThisWeek",
+          "type": {
+            "bool": true
+          }
+        },
+        "scLastWeek": {
+          "displayName": "scLastWeek",
+          "displayNameKey": "Prop_ScLastWeek",
+          "type": {
+            "bool": true
+          }
+        },
+        "scThisMonth": {
+          "displayName": "scThisMonth",
+          "displayNameKey": "Prop_ScThisMonth",
+          "type": {
+            "bool": true
+          }
+        },
+        "scLastMonth": {
+          "displayName": "scLastMonth",
+          "displayNameKey": "Prop_ScLastMonth",
+          "type": {
+            "bool": true
+          }
+        },
+        "scMtd": {
+          "displayName": "scMtd",
+          "displayNameKey": "Prop_ScMtd",
+          "type": {
+            "bool": true
+          }
+        },
+        "scQtd": {
+          "displayName": "scQtd",
+          "displayNameKey": "Prop_ScQtd",
+          "type": {
+            "bool": true
+          }
+        },
+        "scYtd": {
+          "displayName": "scYtd",
+          "displayNameKey": "Prop_ScYtd",
+          "type": {
+            "bool": true
+          }
+        },
+        "scThisQuarter": {
+          "displayName": "scThisQuarter",
+          "displayNameKey": "Prop_ScThisQuarter",
+          "type": {
+            "bool": true
+          }
+        },
+        "scLastQuarter": {
+          "displayName": "scLastQuarter",
+          "displayNameKey": "Prop_ScLastQuarter",
+          "type": {
+            "bool": true
+          }
+        },
+        "scThisSemester": {
+          "displayName": "scThisSemester",
+          "displayNameKey": "Prop_ScThisSemester",
+          "type": {
+            "bool": true
+          }
+        },
+        "scLastSemester": {
+          "displayName": "scLastSemester",
+          "displayNameKey": "Prop_ScLastSemester",
+          "type": {
+            "bool": true
+          }
+        },
+        "scThisYear": {
+          "displayName": "scThisYear",
+          "displayNameKey": "Prop_ScThisYear",
+          "type": {
+            "bool": true
+          }
+        },
+        "scDynamic": {
+          "displayName": "scDynamic",
+          "displayNameKey": "Prop_ScDynamic",
+          "type": {
+            "bool": true
+          }
+        }
+      }
+    },
+    "granularityOptions": {
+      "displayName": "Granularidades Vis\u00edveis",
+      "displayNameKey": "Card_GranularityOptions",
+      "properties": {
+        "autoGranularity": {
+          "displayName": "Granularidade autom\u00e1tica",
+          "displayNameKey": "Prop_AutoGranularity",
+          "description": "Ligado: a granularidade escolhida acima \u00e9 s\u00f3 uma sugest\u00e3o \u2014 se o intervalo selecionado tiver poucos pontos nesse n\u00edvel (ou esse n\u00edvel estiver desligado), desce automaticamente para o pr\u00f3ximo n\u00edvel dispon\u00edvel. A grelha mostrada nunca muda sozinha; s\u00f3 o filtro efetivo enviado aos outros visuais \u00e9 que pode ser diferente do n\u00edvel clicado. Desligado: for\u00e7a sempre o n\u00edvel escolhido, sem downgrade nenhum.",
+          "descriptionKey": "Prop_AutoGranularity_Desc",
+          "type": {
+            "bool": true
+          }
+        },
+        "showAutoGranToggle": {
+          "displayName": "Mostrar interruptor Autom\u00e1tico/Manual ao utilizador",
+          "displayNameKey": "Prop_ShowAutoGranToggle",
+          "description": "Mostra, dentro do pr\u00f3prio seletor, um interruptor que permite a quem v\u00ea o relat\u00f3rio trocar entre granularidade autom\u00e1tica e manual. A escolha n\u00e3o fica gravada \u2014 reinicia sempre no valor de \"Granularidade autom\u00e1tica\" acima ao reabrir o relat\u00f3rio.",
+          "descriptionKey": "Prop_ShowAutoGranToggle_Desc",
+          "type": {
+            "bool": true
+          }
+        },
+        "granD": {
+          "displayName": "Di\u00e1rio (D)",
+          "displayNameKey": "Prop_GranD",
+          "type": {
+            "bool": true
+          }
+        },
+        "granLabelD": {
+          "displayName": "Di\u00e1rio",
+          "displayNameKey": "Prop_GranLabelD",
+          "type": {
+            "text": true
+          }
+        },
+        "granW": {
+          "displayName": "Semanal (W)",
+          "displayNameKey": "Prop_GranW",
+          "type": {
+            "bool": true
+          }
+        },
+        "granWThreshold": {
+          "displayName": "W \u2014 m\u00ednimo de semanas",
+          "displayNameKey": "Prop_GranWThreshold",
+          "type": {
+            "numeric": true
+          }
+        },
+        "granLabelW": {
+          "displayName": "Semanal",
+          "displayNameKey": "Prop_GranLabelW",
+          "type": {
+            "text": true
+          }
+        },
+        "granM": {
+          "displayName": "Mensal (M)",
+          "displayNameKey": "Prop_GranM",
+          "type": {
+            "bool": true
+          }
+        },
+        "granMThreshold": {
+          "displayName": "M \u2014 m\u00ednimo de meses",
+          "displayNameKey": "Prop_GranMThreshold",
+          "type": {
+            "numeric": true
+          }
+        },
+        "granLabelM": {
+          "displayName": "Mensal",
+          "displayNameKey": "Prop_GranLabelM",
+          "type": {
+            "text": true
+          }
+        },
+        "granQ": {
+          "displayName": "Trimestral (Q)",
+          "displayNameKey": "Prop_GranQ",
+          "type": {
+            "bool": true
+          }
+        },
+        "granQThreshold": {
+          "displayName": "Q \u2014 m\u00ednimo de trimestres",
+          "displayNameKey": "Prop_GranQThreshold",
+          "type": {
+            "numeric": true
+          }
+        },
+        "granLabelQ": {
+          "displayName": "Trimestral",
+          "displayNameKey": "Prop_GranLabelQ",
+          "type": {
+            "text": true
+          }
+        },
+        "granS": {
+          "displayName": "Semestral (S)",
+          "displayNameKey": "Prop_GranS",
+          "type": {
+            "bool": true
+          }
+        },
+        "granSThreshold": {
+          "displayName": "S \u2014 m\u00ednimo de semestres",
+          "displayNameKey": "Prop_GranSThreshold",
+          "type": {
+            "numeric": true
+          }
+        },
+        "granLabelS": {
+          "displayName": "Semestral",
+          "displayNameKey": "Prop_GranLabelS",
+          "type": {
+            "text": true
+          }
+        },
+        "granY": {
+          "displayName": "Anual (Y)",
+          "displayNameKey": "Prop_GranY",
+          "type": {
+            "bool": true
+          }
+        },
+        "granYThreshold": {
+          "displayName": "Y \u2014 m\u00ednimo de anos",
+          "displayNameKey": "Prop_GranYThreshold",
+          "type": {
+            "numeric": true
+          }
+        },
+        "granLabelY": {
+          "displayName": "Anual",
+          "displayNameKey": "Prop_GranLabelY",
+          "type": {
+            "text": true
+          }
+        }
+      }
+    }
+  },
+  "dataViewMappings": [
+    {
+      "conditions": [
+        {
+          "dateColumn": {
+            "max": 1
+          },
+          "langMeasure": {
+            "max": 1
+          },
+          "refDateMeasure": {
+            "max": 1
+          },
+          "granColumn": {
+            "max": 1
+          }
+        }
+      ],
+      "categorical": {
+        "categories": {
+          "select": [
+            {
+              "for": {
+                "in": "dateColumn"
+              }
+            },
+            {
+              "for": {
+                "in": "granColumn"
+              }
+            }
+          ],
+          "dataReductionAlgorithm": {
+            "top": {
+              "count": 30000
+            }
+          }
+        },
+        "values": {
+          "select": [
+            {
+              "bind": {
+                "to": "langMeasure"
+              }
+            },
+            {
+              "bind": {
+                "to": "refDateMeasure"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "privileges": [],
+  "supportsEmptyDataView": true,
+  "suppressDefaultTitle": true,
+  "supportsSynchronizingFilterState": true,
+  "supportsLandingPage": true,
+  "supportsKeyboardFocus": true,
+  "tooltips": {
+    "supportedTypes": {
+      "default": true,
+      "canvas": true
+    },
+    "supportEnhancedTooltips": true
+  }
 }
