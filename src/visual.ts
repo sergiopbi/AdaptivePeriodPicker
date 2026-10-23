@@ -44,7 +44,8 @@ export class Visual implements IVisual {
     private defaultN = 12; // configurable default number of periods for the refresh button
     private defaultType = "dynamic"; // what the refresh button applies
     private applyImmediate = true; // true = apply on click, false = require Apply button
-    private hoverExpandEnabled = false; // Inline Vertical only — see hoverExpand's description
+    private hoverExpandEnabled = false; // Inline Vertical only — see hoverExpand's description (now "reveal on click")
+    private revealOpen = false; // true while the visual is "selected" and its hidden zones are shown
     private resizersLocked = false;
     private scVisible: Record<string,boolean> = {}; // per-shortcut visibility toggles
     private dataMinDate: Date|null = null; // min date from the date table
@@ -158,6 +159,11 @@ export class Visual implements IVisual {
         this.selectionManager = o.host.createSelectionManager();
         this.lang = (o.host.locale||"").toLowerCase().startsWith("pt") ? "PT" : "EN";
         this.buildShell();
+        // Collapse the reveal-on-click zones when focus leaves this visual (click on another
+        // visual, the report canvas, or the page background) or Escape is pressed.
+        const collapseReveal=()=>{ this.revealOpen=false; this.wrap?.classList.remove("dp-hover-active"); };
+        window.addEventListener("blur",collapseReveal);
+        document.addEventListener("keydown",(ev:KeyboardEvent)=>{ if(ev.key==="Escape") collapseReveal(); });
         // Standard right-click context menu (Format visual / Filter / etc.) — Microsoft's
         // guidelines recommend every Power BI visual enable this for a consistent
         // experience, even visuals like this one with no individual data points to select.
@@ -641,7 +647,7 @@ export class Visual implements IVisual {
         footer.append(this.footerInfo,footerBtns);
         const autoRow=this.buildAutoGranRow(false);
         // Everything from here down (shortcuts+calendar, Auto/Man., footer) is what
-        // "Mostrar apenas ao passar o rato" hides by default — granularity and Início/Fim,
+        // "Mostrar apenas quando selecionado" hides by default — granularity and Início/Fim,
         // built above, always stay visible regardless of that setting. Grouped in one
         // wrapper purely so the hover toggle only has one element to show/hide, not four.
         const revealWrap=this.e("div","dp-hover-reveal");
@@ -661,8 +667,38 @@ export class Visual implements IVisual {
             // that left wrap's own opaque background showing through underneath it, which
             // is what kept looking solid regardless of the "área expansível" setting.
             this.wrap.classList.add("dp-hover-mode");
-            this.wrap.addEventListener("mouseenter",()=>this.wrap.classList.add("dp-hover-active"));
-            this.wrap.addEventListener("mouseleave",()=>this.wrap.classList.remove("dp-hover-active"));
+            // Click-to-reveal (replaces the old mouseenter/mouseleave): the hidden zones show
+            // once the visual itself is clicked, and hide again as soon as anything else on
+            // the page is clicked — see the window "blur" listener in the constructor
+            // (a click on another visual/the canvas moves focus out of this sandboxed
+            // iframe, which is the only signal a custom visual gets for "deselected").
+            // revealOpen persists across rebuilds, since buildShell() recreates this.wrap.
+            // Click AND hover together: a click "arms" the reveal (revealOpen — it also
+            // makes Power BI bring this visual to the front, which is the whole reason a
+            // click is needed when it sits underneath other visuals), but the zones are
+            // only actually shown while the pointer is over the visual. Moving the mouse
+            // away collapses them even though Power BI still considers the visual
+            // selected; coming back re-opens them without another click. Focus leaving
+            // the visual (window blur, below) fully disarms it.
+            let leaveTimer:number|undefined;
+            this.wrap.classList.remove("dp-hover-active");
+            this.wrap.addEventListener("pointerdown",()=>{
+                this.revealOpen=true; window.clearTimeout(leaveTimer); this.wrap.classList.add("dp-hover-active");
+            });
+            this.wrap.addEventListener("pointerenter",()=>{
+                window.clearTimeout(leaveTimer);
+                if(this.revealOpen) this.wrap.classList.add("dp-hover-active");
+            });
+            this.wrap.addEventListener("pointerleave",()=>{
+                window.clearTimeout(leaveTimer);
+                // Collapse immediately (no grace delay — even a few ms of the expanded
+                // panel hanging around after the pointer leaves looked broken). Don't
+                // collapse while a select/input inside is focused — a native <select>
+                // popup counts as "pointer left" while the user is choosing.
+                const a=document.activeElement as HTMLElement|null;
+                if(a && this.wrap.contains(a) && (a.tagName==="SELECT"||a.tagName==="INPUT")) return;
+                this.wrap.classList.remove("dp-hover-active");
+            });
         }
         this.footerBtnsRow=footerBtns;
         this.updateGranPreviewInline();

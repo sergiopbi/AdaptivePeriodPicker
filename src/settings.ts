@@ -49,7 +49,7 @@ class GlobalStyleCard extends FormattingSettingsCard {
         name: "hoverRevealOpacity",
         displayName: "Transparência da área expansível (%)",
         displayNameKey: "Prop_HoverRevealOpacity",
-        description: "Só se aplica com \"Mostrar apenas ao passar o rato\" ativo (Modo de Exibição). Controla a transparência do espaço em branco que fica enquanto os Atalhos/Calendário/Painel de controlo estão escondidos — cada uma dessas zonas mantém o seu próprio fundo (em \"Zonas\") quando aparece.",
+        description: "Só se aplica com \"Mostrar apenas quando selecionado\" ativo (Modo de Exibição). Controla a transparência do espaço em branco que fica enquanto os Atalhos/Calendário/Painel de controlo estão escondidos — cada uma dessas zonas mantém o seu próprio fundo (em \"Zonas\") quando aparece.",
         descriptionKey: "Prop_HoverRevealOpacity_Desc",
         value: 0, options:{ minValue:{type:0,value:0}, maxValue:{type:1,value:100} }
     });
@@ -241,9 +241,9 @@ class DisplayModeCard extends FormattingSettingsCard {
 
     hoverExpand = new formattingSettings.ToggleSwitch({
         name: "hoverExpand",
-        displayName: "Mostrar apenas ao passar o rato",
+        displayName: "Mostrar apenas quando selecionado",
         displayNameKey: "Prop_HoverExpand",
-        description: "Só se aplica no modo Inline Vertical. Por defeito mostra só a granularidade e as datas de Início/Fim — os atalhos, a grelha do calendário e o rodapé só aparecem enquanto o rato estiver por cima do visual. O tamanho do próprio visual no relatório não muda; isto só mostra/esconde conteúdo dentro do espaço que já lá está.",
+        description: "Só se aplica no modo Inline Vertical. Por defeito mostra só a granularidade e as datas de Início/Fim — os atalhos, a grelha do calendário e o rodapé só aparecem depois de clicar no visual e só enquanto o rato estiver por cima dele; escondem-se ao afastar o rato, ao clicar noutro visual ou noutro sítio da página, ou com Esc. O tamanho do próprio visual no relatório não muda; isto só mostra/esconde conteúdo dentro do espaço que já lá está.",
         descriptionKey: "Prop_HoverExpand_Desc",
         value: false
     });
