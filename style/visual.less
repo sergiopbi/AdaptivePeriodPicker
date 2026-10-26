@@ -39,19 +39,19 @@
     background: var(--dp-bg); border-radius: 6px;
     border: var(--dp-border-width) solid var(--dp-border);
     width: 100%; height: 100%;
-    transition: border-color 0.15s, filter 0.15s;
+    transition: border-color 0.15s, background 0.15s;
     font-family: var(--dp-font-family, "Segoe UI", sans-serif);
-    &:hover { filter: brightness(1.12); border-color: var(--dp-accent); }
+    &:hover { background: color-mix(in srgb, var(--dp-bg) 88%, white); border-color: var(--dp-accent); }
 
     .dp-closed-icon { font-size: 15px; opacity: 0.85; flex-shrink: 0; }
     .dp-closed-text {
         flex: 1; overflow: hidden;
         .dp-closed-gran {
-            font-size: calc(var(--dp-font-size-cal, 12px) - 2.5px); color: var(--dp-title);
+            font-size: calc(var(--dp-font-size-cal, 12px) - 3px); color: var(--dp-title);
             text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 2px; font-weight: 600;
         }
         .dp-closed-range { font-size: var(--dp-font-size-cal, 13px); color: var(--dp-value); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .dp-closed-hint  { font-size: calc(var(--dp-font-size-cal, 12px) - 0.5px); color: var(--dp-title); font-style: italic; }
+        .dp-closed-hint  { font-size: calc(var(--dp-font-size-cal, 12px) - 1px); color: var(--dp-title); font-style: italic; }
     }
     .dp-closed-refresh {
         color: var(--dp-title); flex-shrink: 0;
@@ -358,8 +358,8 @@
 .dp-pop-wds {
     display: grid; grid-template-columns: 0.65fr repeat(7,1fr); gap: 0 2px;
     padding-bottom: 2px;
-    .dp-pop-wd { text-align: center; font-size: calc(var(--dp-font-size-cal, 12px) - 2.5px); color: var(--dp-title); padding: 2px 0; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; }
-    .dp-pop-wn-header { opacity: 0.4; font-size: calc(var(--dp-font-size-cal, 12px) - 3.5px); }
+    .dp-pop-wd { text-align: center; font-size: calc(var(--dp-font-size-cal, 12px) - 3px); color: var(--dp-title); padding: 2px 0; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; }
+    .dp-pop-wn-header { opacity: 0.4; font-size: calc(var(--dp-font-size-cal, 12px) - 4px); }
 }
 .dp-pop-days {
     flex: 1; display: grid; grid-template-columns: 0.65fr repeat(7,1fr);
@@ -470,8 +470,8 @@
 // Adaptive per-granularity reduction — expressed relative to the shared content base so
 // the header (.dp-pop-yrlabel for Q/S/Y, .dp-pop-my select for D/M/W) and the grid cells
 // always shrink together, whatever the base size is currently set to.
-.dp-cal-area-q .dp-period-cell, .dp-cal-area-q .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 1.5px); }
-.dp-cal-area-s .dp-period-cell, .dp-cal-area-s .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 3.5px); }
+.dp-cal-area-q .dp-period-cell, .dp-cal-area-q .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 2px); }
+.dp-cal-area-s .dp-period-cell, .dp-cal-area-s .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 4px); }
 .dp-cal-area-w .dp-period-cell, .dp-cal-area-w .dp-pop-my select { font-size: calc(var(--dp-font-size-cal, 12px) - 3px); }
 
 /* ── AUTO/MANUAL GRANULARITY ROW: shared by inline-vertical and inline-horizontal ── */
@@ -559,7 +559,7 @@
         // shadow already make Apply read as the primary action without needing bolder text.
         background: var(--dp-accent); color: var(--dp-accent-text); border-color: var(--dp-accent);
         box-shadow: 0 2px 8px color-mix(in srgb, var(--dp-accent) 40%, transparent);
-        &:hover { filter: brightness(1.1); box-shadow: 0 3px 12px color-mix(in srgb, var(--dp-accent) 55%, transparent); }
+        &:hover { background: color-mix(in srgb, var(--dp-accent) 90%, white); box-shadow: 0 3px 12px color-mix(in srgb, var(--dp-accent) 55%, transparent); }
         &:active { transform: translateY(1px); }
     }
 }
@@ -649,7 +649,7 @@
     &.dp-empty-collapsed { width: 0; padding: 0; border-right: none; overflow: hidden; }
 
     /* Compress each shortcut row so all 5 fit without scrolling */
-    .dp-pop-sc { padding: 5px 6px; font-size: calc(var(--dp-font-size-shortcuts, 11px) - 0.5px); }
+    .dp-pop-sc { padding: 5px 6px; font-size: calc(var(--dp-font-size-shortcuts, 11px) - 1px); }
     .dp-pop-div { margin: 3px 12px; }
 
     /* Number box: wide enough to never clip, spinner arrows removed entirely
@@ -678,11 +678,11 @@
     .dp-pop-my select { font-size: calc(var(--dp-font-size-cal, 12px) - 1px); padding: 1px 3px; }
     .dp-pop-nav { width: 20px; height: 20px; font-size: 13px; }
     .dp-pop-grid { flex: 1; gap: 1px; overflow-y: auto; .dp-thin-scrollbar(); }
-    .dp-pop-wds { padding-bottom: 0; .dp-pop-wd { padding: 0; font-size: calc(var(--dp-font-size-cal, 12px) - 3.5px); } }
-    .dp-pop-day { min-height: 16px; font-size: calc(var(--dp-font-size-cal, 12px) - 1.5px); border-radius: 4px; }
+    .dp-pop-wds { padding-bottom: 0; .dp-pop-wd { padding: 0; font-size: calc(var(--dp-font-size-cal, 12px) - 4px); } }
+    .dp-pop-day { min-height: 16px; font-size: calc(var(--dp-font-size-cal, 12px) - 2px); border-radius: 4px; }
     .dp-pop-wn { font-size: calc(var(--dp-font-size-cal, 12px) - 4px); }
-    .dp-period-cell { min-height: 22px; font-size: calc(var(--dp-font-size-cal, 12px) - 1.5px); }
-    .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 1.5px); }
+    .dp-period-cell { min-height: 22px; font-size: calc(var(--dp-font-size-cal, 12px) - 2px); }
+    .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 2px); }
 }
 // Same per-granularity adaptive reductions as the vertical/popup modes, layered on top of
 // the already-compact horizontal base above — Q/S/W still shrink further than M/D/Y here.
@@ -690,7 +690,7 @@
 // order, since .dp-cal-area-X is a child of .dp-horiz-cal, not the same element.
 .dp-horiz-cal .dp-cal-area-q .dp-period-cell, .dp-horiz-cal .dp-cal-area-q .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 3px); }
 .dp-horiz-cal .dp-cal-area-s .dp-period-cell, .dp-horiz-cal .dp-cal-area-s .dp-pop-yrlabel { font-size: calc(var(--dp-font-size-cal, 12px) - 5px); }
-.dp-horiz-cal .dp-cal-area-w .dp-period-cell, .dp-horiz-cal .dp-cal-area-w .dp-pop-my select { font-size: calc(var(--dp-font-size-cal, 12px) - 4.5px); }
+.dp-horiz-cal .dp-cal-area-w .dp-period-cell, .dp-horiz-cal .dp-cal-area-w .dp-pop-my select { font-size: calc(var(--dp-font-size-cal, 12px) - 5px); }
 
 /* Column 3 (rightmost): start/end dates + day count + actions, all in one panel */
 .dp-horiz-side {
@@ -755,4 +755,11 @@
     .qahs-dp-landing-msg {
         font-size: 12px; color: #666; text-align: center; line-height: 1.4;
     }
+}
+
+/* Typeface guard: native form controls and <option> popups ignore inherited fonts
+   unless told to — force the single font chosen in Global Style everywhere. */
+.qahs-dp-root, .dp-horiz-root {
+    button, input, select, option, textarea, label { font-family: var(--dp-font-family, "Segoe UI", sans-serif); }
+    text-rendering: optimizeLegibility;
 }

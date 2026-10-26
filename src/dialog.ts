@@ -198,7 +198,7 @@ export class DatePickerDialog {
                 s.setProperty(`--dp-zone-${key}-bg`,      `color-mix(in srgb, ${color||"#16243f"} ${zOp(opacity,defOpacity)}%, transparent)`);
                 s.setProperty(`--dp-zone-${key}-radius`,  `${radius??defRadius}px`);
                 s.setProperty(`--dp-zone-${key}-boxsize`, `${boxSize??defBoxSize}px`);
-                s.setProperty(`--dp-font-size-${key}`,    `${(fontSize||defFontSize)*4/3}px`);
+                s.setProperty(`--dp-font-size-${key}`,    `${Math.round((fontSize||defFontSize)*4/3)}px`);
                 if(box) s.setProperty(`--dp-zone-${key}-box-bg`, `color-mix(in srgb, ${box.color||"#16243f"} ${zOp(box.opacity,box.defOpacity)}%, transparent)`);
                 if(zoneEl){
                     zoneEl.style.setProperty("--dp-accent",      zoneColors.selected||"#2d6bc4");

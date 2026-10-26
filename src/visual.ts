@@ -294,7 +294,7 @@ export class Visual implements IVisual {
             target.style.setProperty(`--dp-zone-${key}-bg`,     `color-mix(in srgb, ${color} ${op(opacity,defs.opacity)}%, transparent)`);
             target.style.setProperty(`--dp-zone-${key}-radius`, `${radius}px`);
             target.style.setProperty(`--dp-zone-${key}-boxsize`,`${boxSize}px`);
-            target.style.setProperty(`--dp-font-size-${key}`,   `${(fontSize||defs.fontSize)*4/3}px`);
+            target.style.setProperty(`--dp-font-size-${key}`,   `${Math.round((fontSize||defs.fontSize)*4/3)}px`);
             if(defs.box){
                 const boxColor=zone?.boxColor?.value.value??defs.box.color;
                 const boxOpacity=zone?.boxOpacity?.value??defs.box.opacity;
